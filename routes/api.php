@@ -129,8 +129,12 @@ Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
     Route::get('/mis-mascotas/{id}',       [PetController::class, 'show']);
     Route::post('/mis-mascotas',           [PetController::class, 'store']);
     Route::put('/mis-mascotas/{id}',       [PetController::class, 'update']);
+    Route::delete('/mis-mascotas/{id}', [PetController::class, 'destroy']);
 
     // Sus citas
     Route::post('/appointments',          [AppointmentController::class, 'store']);
     Route::delete('/appointments/{id}',   [AppointmentController::class, 'destroy']);
 });
+
+
+
