@@ -6,10 +6,10 @@ use App\Models\Appointment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\BroadcastMessage;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Notifications\Messages\MailMessage;
 
-class AppointmentStatusChanged extends Notification implements ShouldBroadcastNow
+class AppointmentStatusChanged extends Notification implements ShouldBroadcast
 {
     use Queueable;
 

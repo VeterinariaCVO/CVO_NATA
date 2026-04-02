@@ -7,9 +7,9 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 
-class AppointmentCancelled extends Notification implements ShouldBroadcastNow
+class AppointmentCancelled extends Notification implements ShouldBroadcast
 {
     use Queueable;
 
