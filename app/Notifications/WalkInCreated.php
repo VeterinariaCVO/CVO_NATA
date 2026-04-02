@@ -5,14 +5,16 @@ namespace App\Notifications;
 use App\Models\Appointment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Notifications\Messages\BroadcastMessage;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 
-class WalkInCreated extends Notification
+class WalkInCreated extends Notification implements ShouldBroadcastNow
 {
     use Queueable;
 
     public function __construct(public Appointment $appointment) {}
 
-    public function via(object $notifiable): array { return ['database']; }
+    public function via(object $notifiable): array { return ['database', 'broadcast']; }
 
     public function toDatabase(object $notifiable): array
     {
@@ -35,4 +37,10 @@ class WalkInCreated extends Notification
             ] : null,
         ];
     }
+        public function toBroadcast($notifiable)
+{
+    return new BroadcastMessage([
+        'data' => $this->toDatabase($notifiable)
+    ]);
+}
 }
