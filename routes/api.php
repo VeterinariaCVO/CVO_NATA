@@ -11,6 +11,7 @@ use App\Http\Controllers\WorkingDayController;
 use App\Http\Controllers\TimeSlotController;
 use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\NotificationController;
+use Illuminate\Support\Facades\Broadcast;
 
 // ─── PÚBLICO ──────────────────────────────────────────────────────────────────
 Route::post('/register', [ApiAuthController::class, 'register']);
@@ -18,6 +19,10 @@ Route::post('/login',    [ApiAuthController::class, 'login']);
 
 // ─── AUTENTICADO (cualquier rol) ──────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
+
+     Route::post('/broadcasting/auth', function (\Illuminate\Http\Request $request) {
+        return Broadcast::auth($request);
+    });
 
     Route::post('/logout', [ApiAuthController::class, 'logout']);
     Route::get('/me',      [ApiAuthController::class, 'me']);

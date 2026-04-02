@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use App\Notifications\UserRegistered;
 
 class UserController extends Controller
 {
@@ -31,6 +32,8 @@ class UserController extends Controller
         }
 
         $user = User::create($data);
+
+        $user->notify(new UserRegistered($user));
 
         return $this->success(
             new UserResource($user->load('role')),
