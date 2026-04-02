@@ -17,7 +17,7 @@ class UserRegistered extends Notification implements ShouldBroadcast
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast'];
+        return ['database', 'broadcast', 'mail'];
     }
 
     public function toDatabase(object $notifiable): array
