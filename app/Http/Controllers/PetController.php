@@ -19,7 +19,6 @@ class PetController extends Controller
         $user  = Auth::user();
         $query = Pet::with('owner');
 
-        // Cliente: solo ve sus propias mascotas
         if ($user->isCliente()) {
             $query->where('owner_id', $user->id);
         }
@@ -34,6 +33,8 @@ class PetController extends Controller
 
         return $this->success(PetResource::collection($query->orderBy('name')->get()));
     }
+
+
 
     public function show($id)
     {
@@ -62,6 +63,8 @@ class PetController extends Controller
             201
         );
     }
+
+
 
     public function update(PetRequest $request, $id)
     {
