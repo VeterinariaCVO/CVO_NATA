@@ -11,7 +11,7 @@ use App\Notifications\UserRegistered;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
-class ApiAuthController extends Controller
+class  ApiAuthController extends Controller
 {
     use ApiResponse;
 

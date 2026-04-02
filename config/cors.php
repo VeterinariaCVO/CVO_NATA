@@ -15,11 +15,17 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*',
+    'broadcasting/auth',
+    'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+
+    'allowed_origins' => [
+        'http://localhost:5173', 'https://natita.me'
+    ],
+
 
     'allowed_origins_patterns' => [],
 
