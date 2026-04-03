@@ -62,6 +62,12 @@ class PetController extends Controller
             'Mascota registrada exitosamente',
             201
         );
+        if (Auth::user()->isCliente()) {
+        $total = Pet::where('owner_id', Auth::id())->count();
+        if ($total >= 8) {
+        return $this->error('Has alcanzado el límite de 8 mascotas.', 422);
+             }
+        }
     }
 
 
