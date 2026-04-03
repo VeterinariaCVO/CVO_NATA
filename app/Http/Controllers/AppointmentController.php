@@ -32,14 +32,16 @@ class AppointmentController extends Controller
         $user  = Auth::user();
         $query = $this->baseQuery();
 
-        // Cliente: solo sus citas
         if ($user->isCliente()) {
             $query->whereHas('pet', fn($q) => $q->where('owner_id', $user->id));
         }
 
-        // Veterinario: solo citas asignadas a él via medical_records o todas en in_progress/completed
         if ($user->isVeterinario()) {
             $query->whereIn('status', ['confirmed', 'in_progress', 'completed']);
+        }
+
+        if (request('status')) {
+            $query->where('status', request('status'));
         }
 
         return $this->success(
@@ -99,15 +101,14 @@ class AppointmentController extends Controller
         $appointment = Appointment::findOrFail($id);
         $oldStatus   = $appointment->status;
 
-        // Cambio de slot
-        if ($request->time_slot_id !== $appointment->time_slot_id) {
+        // Solo cambiar slot si viene en el request
+        if ($request->filled('time_slot_id') && $request->time_slot_id != $appointment->time_slot_id) {
             $newSlot = TimeSlot::findOrFail($request->time_slot_id);
 
             if ($newSlot->status === 'reserved') {
                 return $this->error('El horario seleccionado está ocupado.', 400);
             }
 
-            // Liberar slot anterior si existía
             if ($appointment->time_slot_id) {
                 TimeSlot::find($appointment->time_slot_id)?->update(['status' => 'available']);
             }
@@ -117,13 +118,12 @@ class AppointmentController extends Controller
 
         $appointment->update([
             'pet_id'       => $request->pet_id       ?? $appointment->pet_id,
-            'time_slot_id' => $request->time_slot_id,
+            'time_slot_id' => $request->time_slot_id ?? $appointment->time_slot_id,
             'service_id'   => $request->service_id   ?? $appointment->service_id,
-            'notes'        => $request->notes         ?? $appointment->notes,
-            'status'       => $request->status        ?? $appointment->status,
+            'notes'        => $request->notes        ?? $appointment->notes,
+            'status'       => $request->status       ?? $appointment->status,
         ]);
 
-        // Notificar cambio de estado si cambió
         if ($request->filled('status') && $request->status !== $oldStatus) {
             $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service']);
             $owner = $appointment->pet?->owner;
