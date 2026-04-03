@@ -26,7 +26,6 @@ class PetRequest extends FormRequest
             'age'           => 'nullable|integer|min:0|max:100',
             'photo'         => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
             'active'        => 'nullable|boolean',
-            // Admin, empleado y veterinario pueden asignar owner; cliente lo tiene implícito
             'owner_id'      => in_array($user?->role_id, [1, 2, 4])
                                 ? "{$prefix}|integer|exists:users,id"
                                 : 'nullable',
