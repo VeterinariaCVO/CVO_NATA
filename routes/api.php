@@ -26,6 +26,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [ApiAuthController::class, 'logout']);
     Route::get('/me',      [ApiAuthController::class, 'me']);
+    Route::post('/me/update', [ApiAuthController::class, 'updateProfile']);  
+    Route::put('/me/password', [ApiAuthController::class, 'updatePassword']);
 
     // Catálogo de servicios (solo activos, lectura)
     Route::get('/services', [ServiceController::class, 'index']);
@@ -49,7 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/medical-records',     [MedicalRecordController::class, 'index']);
     Route::get('/medical-records/{id}',[MedicalRecordController::class, 'show']);
 
-    // Citas (lectura para todos, escritura controlada por rol)
+    // Citas (lectura para todos)
     Route::get('/appointments',        [AppointmentController::class, 'index']);
     Route::get('/appointments/{id}',   [AppointmentController::class, 'show']);
 });
@@ -83,16 +85,12 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::put('/time-slots/{id}',         [TimeSlotController::class, 'update']);
     Route::delete('/time-slots/{id}',      [TimeSlotController::class, 'destroy']);
 
-    // Citas (gestión completa)
-    Route::post('/appointments',           [AppointmentController::class, 'store']);
-    Route::put('/appointments/{id}',       [AppointmentController::class, 'update']);
-    Route::delete('/appointments/{id}',    [AppointmentController::class, 'destroy']);
-
-    // Walk-in
-    Route::post('/walk-in',               [WalkInController::class, 'store']);
-
     // Mascotas (gestión completa)
-    Route::apiResource('/pets', PetController::class);
+    Route::get('/admin/pets',          [PetController::class, 'index']);
+    Route::post('/admin/pets',         [PetController::class, 'store']);
+    Route::get('/admin/pets/{id}',     [PetController::class, 'show']);
+    Route::put('/admin/pets/{id}',     [PetController::class, 'update']);
+    Route::delete('/admin/pets/{id}',  [PetController::class, 'destroy']);
 });
 
 // ─── EMPLEADO / RECEPCIONISTA (role 2) ────────────────────────────────────────
@@ -102,11 +100,6 @@ Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
     Route::get('/empleado/clients',       [UserController::class, 'clients']);
     Route::get('/empleado/clients/{id}',  [UserController::class, 'showClient']);
 
-    // Citas
-    Route::post('/appointments',          [AppointmentController::class, 'store']);
-    Route::put('/appointments/{id}',      [AppointmentController::class, 'update']);
-    Route::delete('/appointments/{id}',   [AppointmentController::class, 'destroy']);
-
     // Walk-in (CU-20)
     Route::post('/walk-in',              [WalkInController::class, 'store']);
 
@@ -114,12 +107,28 @@ Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
     Route::apiResource('/pets', PetController::class);
 });
 
+// ─── CITAS: Cliente, Recepcionista y Admin (roles 1, 2, 3) ───────────────────
+Route::middleware(['auth:sanctum', 'role:1,2,3'])->group(function () {
+    Route::post('/appointments',        [AppointmentController::class, 'store']);
+    Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
+});
+
+// ─── CITAS: Solo Recepcionista y Admin (roles 1, 2) ──────────────────────────
+Route::middleware(['auth:sanctum', 'role:1,2'])->group(function () {
+    Route::put('/appointments/{id}',    [AppointmentController::class, 'update']);
+});
+
+// ─── WALK-IN: Admin (role 1) ─────────────────────────────────────────────────
+Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
+    Route::post('/walk-in',             [WalkInController::class, 'store']);
+});
+
 // ─── VETERINARIO (role 4) ─────────────────────────────────────────────────────
-Route::middleware(['auth:sanctum', 'role:4'])->group(function () {
+ Route::middleware(['auth:sanctum', 'role:1,4'])->group(function () {
 
     // Expedientes médicos (creación y edición)
-    Route::post('/medical-records',        [MedicalRecordController::class, 'store']);
-    Route::put('/medical-records/{id}',    [MedicalRecordController::class, 'update']);
+    Route::post('/medical-records',     [MedicalRecordController::class, 'store']);
+    Route::put('/medical-records/{id}', [MedicalRecordController::class, 'update']);
 
     // Mascotas (lectura)
     Route::get('/pets',     [PetController::class, 'index']);
@@ -130,16 +139,9 @@ Route::middleware(['auth:sanctum', 'role:4'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
 
     // Sus mascotas
-    Route::get('/mis-mascotas',            [PetController::class, 'index']);
-    Route::get('/mis-mascotas/{id}',       [PetController::class, 'show']);
-    Route::post('/mis-mascotas',           [PetController::class, 'store']);
-    Route::put('/mis-mascotas/{id}',       [PetController::class, 'update']);
+    Route::get('/mis-mascotas',         [PetController::class, 'index']);
+    Route::get('/mis-mascotas/{id}',    [PetController::class, 'show']);
+    Route::post('/mis-mascotas',        [PetController::class, 'store']);
+    Route::put('/mis-mascotas/{id}',    [PetController::class, 'update']);
     Route::delete('/mis-mascotas/{id}', [PetController::class, 'destroy']);
-
-    // Sus citas
-    Route::post('/appointments',          [AppointmentController::class, 'store']);
-    Route::delete('/appointments/{id}',   [AppointmentController::class, 'destroy']);
 });
-
-
-
