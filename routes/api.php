@@ -30,6 +30,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Catálogo de servicios (solo activos, lectura)
     Route::get('/services', [ServiceController::class, 'index']);
 
+    Route::get('/petsi', [PetController::class, 'index']);
+
     // Notificaciones
     Route::prefix('notifications')->group(function () {
         Route::get('/',            [NotificationController::class, 'index']);
@@ -83,16 +85,18 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::put('/time-slots/{id}',         [TimeSlotController::class, 'update']);
     Route::delete('/time-slots/{id}',      [TimeSlotController::class, 'destroy']);
 
-    // Citas (gestión completa)
-    Route::post('/appointments',           [AppointmentController::class, 'store']);
-    Route::put('/appointments/{id}',       [AppointmentController::class, 'update']);
-    Route::delete('/appointments/{id}',    [AppointmentController::class, 'destroy']);
-
     // Walk-in
     Route::post('/walk-in',               [WalkInController::class, 'store']);
 
     // Mascotas (gestión completa)
     Route::apiResource('/pets', PetController::class);
+});
+
+//appointments empleado - admin
+Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
+    Route::post('/appointments',          [AppointmentController::class, 'store']);
+    Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
+    Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
 });
 
 // ─── EMPLEADO / RECEPCIONISTA (role 2) ────────────────────────────────────────
@@ -101,11 +105,6 @@ Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
     // Clientes
     Route::get('/empleado/clients',       [UserController::class, 'clients']);
     Route::get('/empleado/clients/{id}',  [UserController::class, 'showClient']);
-
-    // Citas
-    Route::post('/appointments',          [AppointmentController::class, 'store']);
-    Route::put('/appointments/{id}',      [AppointmentController::class, 'update']);
-    Route::delete('/appointments/{id}',   [AppointmentController::class, 'destroy']);
 
     // Walk-in (CU-20)
     Route::post('/walk-in',              [WalkInController::class, 'store']);
@@ -137,8 +136,7 @@ Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
     Route::delete('/mis-mascotas/{id}', [PetController::class, 'destroy']);
 
     // Sus citas
-    Route::post('/appointments',          [AppointmentController::class, 'store']);
-    Route::delete('/appointments/{id}',   [AppointmentController::class, 'destroy']);
+    Route::post('/cliente/appointments',          [AppointmentController::class, 'store']);
 });
 
 
