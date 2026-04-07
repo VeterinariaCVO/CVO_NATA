@@ -11,6 +11,7 @@ use App\Http\Controllers\WorkingDayController;
 use App\Http\Controllers\TimeSlotController;
 use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PerfilController;
 use Illuminate\Support\Facades\Broadcast;
 
 // ─── PÚBLICO ──────────────────────────────────────────────────────────────────
@@ -137,6 +138,11 @@ Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
 
     // Sus citas
     Route::post('/cliente/appointments',          [AppointmentController::class, 'store']);
+
+      // Perfil
+    Route::get('/perfil',    [PerfilController::class, 'show']);
+    Route::post('/perfil',   [PerfilController::class, 'update']);
+    Route::delete('/perfil', [PerfilController::class, 'destroy']);
 });
 
 
