@@ -11,6 +11,7 @@ use App\Models\TimeSlot;
 use App\Notifications\AppointmentCancelled;
 use App\Notifications\AppointmentCreated;
 use App\Notifications\AppointmentStatusChanged;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class AppointmentController extends Controller
@@ -27,7 +28,7 @@ class AppointmentController extends Controller
         ]);
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $user  = Auth::user();
         $query = $this->baseQuery();
@@ -36,12 +37,22 @@ class AppointmentController extends Controller
             $query->whereHas('pet', fn($q) => $q->where('owner_id', $user->id));
         }
 
+        // Veterinario: solo citas en estados relevantes
         if ($user->isVeterinario()) {
             $query->whereIn('status', ['confirmed', 'in_progress', 'completed']);
         }
 
-        if (request('status')) {
-            $query->where('status', request('status'));
+        // FIX: filtrar por mascota si se manda pet_id
+        if ($request->filled('pet_id')) {
+            $query->where('pet_id', $request->pet_id);
+        }
+
+        // FIX: filtrar por status (soporta array: status[]=confirmed&status[]=in_progress)
+        if ($request->filled('status')) {
+            $statuses = is_array($request->status)
+                ? $request->status
+                : explode(',', $request->status);
+            $query->whereIn('status', $statuses);
         }
 
         return $this->success(
@@ -71,13 +82,11 @@ class AppointmentController extends Controller
 
         $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
 
-        // Notificar al dueño de la mascota
         $owner = $appointment->pet->owner;
         if ($owner) {
             $owner->notify(new AppointmentCreated($appointment));
         }
 
-        // Si quien crea es admin/empleado y no es el dueño, notificar también al creador
         $creator = Auth::user();
         if ($creator && $owner && $creator->id !== $owner->id) {
             $creator->notify(new AppointmentCreated($appointment));
@@ -101,8 +110,7 @@ class AppointmentController extends Controller
         $appointment = Appointment::findOrFail($id);
         $oldStatus   = $appointment->status;
 
-        // Solo cambiar slot si viene en el request
-        if ($request->filled('time_slot_id') && $request->time_slot_id != $appointment->time_slot_id) {
+        if ($request->time_slot_id && $request->time_slot_id !== $appointment->time_slot_id) {
             $newSlot = TimeSlot::findOrFail($request->time_slot_id);
 
             if ($newSlot->status === 'reserved') {
@@ -132,8 +140,10 @@ class AppointmentController extends Controller
             }
         }
 
+        $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
+
         return $this->success(
-            new AppointmentResource($appointment->fresh(['pet.owner', 'timeSlot.workingDay', 'service', 'creator'])),
+            new AppointmentResource($appointment),
             'Cita actualizada correctamente'
         );
     }
@@ -146,14 +156,12 @@ class AppointmentController extends Controller
             return $this->error('Esta cita no puede cancelarse en su estado actual.', 422);
         }
 
-        // Liberar el slot
         if ($appointment->time_slot_id) {
             TimeSlot::find($appointment->time_slot_id)?->update(['status' => 'available']);
         }
 
         $appointment->update(['status' => 'cancelled']);
 
-        // Notificar al dueño
         $owner = $appointment->pet?->owner;
         if ($owner) {
             $owner->notify(new AppointmentCancelled($appointment));

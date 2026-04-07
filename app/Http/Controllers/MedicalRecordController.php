@@ -8,13 +8,14 @@ use App\Http\Traits\ApiResponse;
 use App\Models\Appointment;
 use App\Models\MedicalRecord;
 use App\Notifications\AppointmentStatusChanged;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class MedicalRecordController extends Controller
 {
     use ApiResponse;
 
-    public function index()
+    public function index(Request $request)
     {
         $user  = Auth::user();
         $query = MedicalRecord::with([
@@ -34,6 +35,11 @@ class MedicalRecordController extends Controller
             $query->where('veterinarian_id', $user->id);
         }
 
+        // FIX: filtrar por mascota si se manda pet_id
+        if ($request->filled('pet_id')) {
+            $query->whereHas('appointment', fn($q) => $q->where('pet_id', $request->pet_id));
+        }
+
         return $this->success(
             MedicalRecordResource::collection($query->orderByDesc('created_at')->get())
         );
@@ -43,7 +49,6 @@ class MedicalRecordController extends Controller
     {
         $appointment = Appointment::with(['pet.owner', 'service'])->findOrFail($request->appointment_id);
 
-        // Solo se puede crear un expediente si la cita está en curso o confirmada
         if (!in_array($appointment->status, ['confirmed', 'in_progress'])) {
             return $this->error('Solo se puede registrar un expediente para citas confirmadas o en curso.', 422);
         }
@@ -61,12 +66,16 @@ class MedicalRecordController extends Controller
         }
 
         return $this->success(
-            new MedicalRecordResource($record->load(['veterinarian', 'appointment.pet', 'appointment.service', 'appointment.timeSlot.workingDay'])),
+            new MedicalRecordResource($record->load([
+                'veterinarian',
+                'appointment.pet',
+                'appointment.service',
+                'appointment.timeSlot.workingDay',
+            ])),
             'Expediente médico registrado correctamente',
             201
         );
     }
-
 
     public function show($id)
     {
@@ -84,14 +93,17 @@ class MedicalRecordController extends Controller
     {
         $record = MedicalRecord::findOrFail($id);
 
-        // No permitir cambiar el appointment_id en un update
         $data = $request->validated();
         unset($data['appointment_id']);
 
         $record->update($data);
 
         return $this->success(
-            new MedicalRecordResource($record->load(['veterinarian', 'appointment.pet', 'appointment.service'])),
+            new MedicalRecordResource($record->load([
+                'veterinarian',
+                'appointment.pet',
+                'appointment.service',
+            ])),
             'Expediente actualizado correctamente'
         );
     }
