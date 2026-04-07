@@ -26,7 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [ApiAuthController::class, 'logout']);
     Route::get('/me',      [ApiAuthController::class, 'me']);
-    Route::post('/me/update', [ApiAuthController::class, 'updateProfile']);  
+    Route::post('/me/update', [ApiAuthController::class, 'updateProfile']);
     Route::put('/me/password', [ApiAuthController::class, 'updatePassword']);
 
     // Catálogo de servicios (solo activos, lectura)
