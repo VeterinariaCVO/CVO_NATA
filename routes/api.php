@@ -32,6 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Catálogo de servicios (solo activos, lectura)
     Route::get('/services', [ServiceController::class, 'index']);
 
+    Route::get('/petsi', [PetController::class, 'index']);
+
     // Notificaciones
     Route::prefix('notifications')->group(function () {
         Route::get('/',            [NotificationController::class, 'index']);
@@ -85,12 +87,22 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::put('/time-slots/{id}',         [TimeSlotController::class, 'update']);
     Route::delete('/time-slots/{id}',      [TimeSlotController::class, 'destroy']);
 
+    // Walk-in
+    Route::post('/walk-in',               [WalkInController::class, 'store']);
+
     // Mascotas (gestión completa)
     Route::get('/admin/pets',          [PetController::class, 'index']);
     Route::post('/admin/pets',         [PetController::class, 'store']);
     Route::get('/admin/pets/{id}',     [PetController::class, 'show']);
     Route::put('/admin/pets/{id}',     [PetController::class, 'update']);
     Route::delete('/admin/pets/{id}',  [PetController::class, 'destroy']);
+});
+
+//appointments empleado - admin
+Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
+    Route::post('/appointments',          [AppointmentController::class, 'store']);
+    Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
+    Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
 });
 
 // ─── EMPLEADO / RECEPCIONISTA (role 2) ────────────────────────────────────────
@@ -144,4 +156,10 @@ Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
     Route::post('/mis-mascotas',        [PetController::class, 'store']);
     Route::put('/mis-mascotas/{id}',    [PetController::class, 'update']);
     Route::delete('/mis-mascotas/{id}', [PetController::class, 'destroy']);
+
+    // Sus citas
+    Route::post('/cliente/appointments',          [AppointmentController::class, 'store']);
 });
+
+
+

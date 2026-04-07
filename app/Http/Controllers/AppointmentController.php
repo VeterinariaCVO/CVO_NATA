@@ -33,7 +33,6 @@ class AppointmentController extends Controller
         $user  = Auth::user();
         $query = $this->baseQuery();
 
-        // Cliente: solo sus citas
         if ($user->isCliente()) {
             $query->whereHas('pet', fn($q) => $q->where('owner_id', $user->id));
         }
@@ -127,10 +126,10 @@ class AppointmentController extends Controller
 
         $appointment->update([
             'pet_id'       => $request->pet_id       ?? $appointment->pet_id,
-            'time_slot_id' => $request->time_slot_id,
+            'time_slot_id' => $request->time_slot_id ?? $appointment->time_slot_id,
             'service_id'   => $request->service_id   ?? $appointment->service_id,
-            'notes'        => $request->notes         ?? $appointment->notes,
-            'status'       => $request->status        ?? $appointment->status,
+            'notes'        => $request->notes        ?? $appointment->notes,
+            'status'       => $request->status       ?? $appointment->status,
         ]);
 
         if ($request->filled('status') && $request->status !== $oldStatus) {
