@@ -23,7 +23,7 @@ class PetRequest extends FormRequest
             'special_marks' => 'nullable|string|max:255',
             'weight'        => 'nullable|numeric|min:0',
             'sex'           => "{$prefix}|in:male,female",
-            'age'           => 'nullable|integer|min:0|max:100',
+            'age'           => 'nullable|integer|min:0|max:360',
             'photo'         => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
             'active'        => 'nullable|boolean',
             'owner_id'      => in_array($user?->role_id, [1, 2, 4])

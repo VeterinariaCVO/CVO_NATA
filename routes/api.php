@@ -11,6 +11,7 @@ use App\Http\Controllers\WorkingDayController;
 use App\Http\Controllers\TimeSlotController;
 use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PerfilController;
 use Illuminate\Support\Facades\Broadcast;
 
 // ─── PÚBLICO ──────────────────────────────────────────────────────────────────
@@ -60,9 +61,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // ─── ADMIN (role 1) ───────────────────────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
-
-    Route::patch('time-slots/{id}/toggle', [TimeSlotController::class, 'toggle']);
-    Route::patch('working-days/{id}/toggle', [WorkingDayController::class, 'toggle']);
 
     // Gestión de usuarios
     Route::get('/admin/users',          [UserController::class, 'index']);
@@ -172,6 +170,11 @@ Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
     Route::get('/client/appointments/{id}', [AppointmentController::class, 'show']);
     Route::put('/cliente/appointments/{id}', [AppointmentController::class, 'update']);
     Route::post('/cliente/appointments',          [AppointmentController::class, 'store']);
+
+      // Perfil
+    Route::get('/perfil',    [PerfilController::class, 'show']);
+    Route::post('/perfil',   [PerfilController::class, 'update']);
+    Route::delete('/perfil', [PerfilController::class, 'destroy']);
     Route::delete('/cliente/appointments/{id}', [AppointmentController::class, 'destroy']);
 });
 
