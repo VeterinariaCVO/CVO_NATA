@@ -107,7 +107,8 @@ Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
 
 // ─── EMPLEADO / RECEPCIONISTA (role 2) ────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
-
+    Route::get('/admin/pets',          [PetController::class, 'index']);
+    Route::get('/admin/pets/{id}',     [PetController::class, 'show']);
     // Clientes
     Route::get('/empleado/clients',       [UserController::class, 'clients']);
     Route::get('/empleado/clients/{id}',  [UserController::class, 'showClient']);
@@ -117,6 +118,12 @@ Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
 
     // Mascotas
     Route::apiResource('/pets', PetController::class);
+
+    Route::get('/recep/appointments',        [AppointmentController::class, 'index']);
+    Route::get('/recep/appointments/{id}',   [AppointmentController::class, 'show']);
+    Route::post('/recep/appointments',          [AppointmentController::class, 'store']);
+    Route::put('/recep/appointments/{id}', [AppointmentController::class, 'update']);
+    Route::delete('/recep/appointments/{id}', [AppointmentController::class, 'destroy']);
 });
 
 // ─── CITAS: Cliente, Recepcionista y Admin (roles 1, 2, 3) ───────────────────
@@ -158,7 +165,11 @@ Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
     Route::delete('/mis-mascotas/{id}', [PetController::class, 'destroy']);
 
     // Sus citas
+    Route::get('/client/appointments', [AppointmentController::class, 'index']);
+    Route::get('/client/appointments/{id}', [AppointmentController::class, 'show']);
+    Route::put('/cliente/appointments/{id}', [AppointmentController::class, 'update']);
     Route::post('/cliente/appointments',          [AppointmentController::class, 'store']);
+    Route::delete('/cliente/appointments/{id}', [AppointmentController::class, 'destroy']);
 });
 
 

@@ -23,6 +23,11 @@ class TimeSlotController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Nunca devolver slots de hoy o días pasados
+        $query->whereHas('workingDay', function ($q) {
+            $q->where('date', '>', now()->toDateString());
+        });
+
         return $this->success(
             TimeSlotResource::collection($query->orderBy('start_time')->get())
         );

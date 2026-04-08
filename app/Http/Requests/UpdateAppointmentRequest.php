@@ -3,7 +3,8 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Contracts\Validation\ValidationRule;
+use App\Models\TimeSlot;
+use Carbon\Carbon;
 
 class UpdateAppointmentRequest extends FormRequest
 {
@@ -18,5 +19,26 @@ class UpdateAppointmentRequest extends FormRequest
             'notes'        => 'nullable|string|max:500',
             'status'       => 'sometimes|in:pending,confirmed,in_progress,completed,cancelled',
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $slotId = $this->input('time_slot_id');
+            if (!$slotId) return;
+
+            $slot = TimeSlot::with('workingDay')->find($slotId);
+            if (!$slot || !$slot->workingDay) return;
+
+            $slotDate = Carbon::parse($slot->workingDay->date)->startOfDay();
+            $today    = Carbon::today();
+
+            if ($slotDate->lte($today)) {
+                $validator->errors()->add(
+                    'time_slot_id',
+                    'Solo puedes reagendar con al menos 1 día de anticipación.'
+                );
+            }
+        });
     }
 }

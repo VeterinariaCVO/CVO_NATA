@@ -13,9 +13,12 @@ class WorkingDayController extends Controller
 
     public function index()
     {
-        return $this->success(
-            WorkingDayResource::collection(WorkingDay::with('timeSlots')->orderBy('date')->get())
-        );
+        $days = WorkingDay::with('timeSlots')
+            ->where('date', '>', now()->toDateString()) // excluir hoy y anteriores
+            ->orderBy('date')
+            ->get();
+
+        return $this->success(WorkingDayResource::collection($days));
     }
 
     public function store(Request $request)

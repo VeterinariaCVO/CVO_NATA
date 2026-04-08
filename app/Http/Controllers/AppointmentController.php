@@ -37,17 +37,14 @@ class AppointmentController extends Controller
             $query->whereHas('pet', fn($q) => $q->where('owner_id', $user->id));
         }
 
-        // Veterinario: solo citas en estados relevantes
         if ($user->isVeterinario()) {
             $query->whereIn('status', ['confirmed', 'in_progress', 'completed']);
         }
 
-        // FIX: filtrar por mascota si se manda pet_id
         if ($request->filled('pet_id')) {
             $query->where('pet_id', $request->pet_id);
         }
 
-        // FIX: filtrar por status (soporta array: status[]=confirmed&status[]=in_progress)
         if ($request->filled('status')) {
             $statuses = is_array($request->status)
                 ? $request->status
@@ -108,7 +105,14 @@ class AppointmentController extends Controller
     public function update(UpdateAppointmentRequest $request, $id)
     {
         $appointment = Appointment::findOrFail($id);
-        $oldStatus   = $appointment->status;
+        $user        = Auth::user();
+
+        // Cliente solo puede modificar sus propias citas
+        if ($user->isCliente() && $appointment->pet->owner_id !== $user->id) {
+            return $this->error('No autorizado.', 403);
+        }
+
+        $oldStatus = $appointment->status;
 
         if ($request->time_slot_id && $request->time_slot_id !== $appointment->time_slot_id) {
             $newSlot = TimeSlot::findOrFail($request->time_slot_id);
@@ -151,6 +155,12 @@ class AppointmentController extends Controller
     public function destroy($id)
     {
         $appointment = $this->baseQuery()->findOrFail($id);
+        $user        = Auth::user();
+
+        // Cliente solo puede cancelar sus propias citas
+        if ($user->isCliente() && $appointment->pet->owner_id !== $user->id) {
+            return $this->error('No autorizado.', 403);
+        }
 
         if (!$appointment->isCancellable()) {
             return $this->error('Esta cita no puede cancelarse en su estado actual.', 422);
