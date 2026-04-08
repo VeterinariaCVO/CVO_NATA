@@ -13,7 +13,7 @@ class UpdateAppointmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'time_slot_id' => 'nullable|exists:time_slots,id',
+            'time_slot_id' => 'sometimes|exists:time_slots,id',
             'pet_id'       => 'sometimes|exists:pets,id',
             'service_id'   => 'sometimes|exists:services,id',
             'notes'        => 'nullable|string|max:500',

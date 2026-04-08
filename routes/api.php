@@ -53,7 +53,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/medical-records',     [MedicalRecordController::class, 'index']);
     Route::get('/medical-records/{id}',[MedicalRecordController::class, 'show']);
 
-    // Citas (lectura para todos)
+    // Citas (lectura para todos, escritura controlada por rol)
     Route::get('/appointments',        [AppointmentController::class, 'index']);
     Route::get('/appointments/{id}',   [AppointmentController::class, 'show']);
 });
@@ -146,11 +146,11 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
 });
 
 // ─── VETERINARIO (role 4) ─────────────────────────────────────────────────────
- Route::middleware(['auth:sanctum', 'role:1,4'])->group(function () {
+Route::middleware(['auth:sanctum', 'role:4'])->group(function () {
 
     // Expedientes médicos (creación y edición)
-    Route::post('/medical-records',     [MedicalRecordController::class, 'store']);
-    Route::put('/medical-records/{id}', [MedicalRecordController::class, 'update']);
+    Route::post('/medical-records',        [MedicalRecordController::class, 'store']);
+    Route::put('/medical-records/{id}',    [MedicalRecordController::class, 'update']);
 
     // Mascotas (lectura)
     Route::get('/pets',     [PetController::class, 'index']);
@@ -161,10 +161,10 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
 
     // Sus mascotas
-    Route::get('/mis-mascotas',         [PetController::class, 'index']);
-    Route::get('/mis-mascotas/{id}',    [PetController::class, 'show']);
-    Route::post('/mis-mascotas',        [PetController::class, 'store']);
-    Route::put('/mis-mascotas/{id}',    [PetController::class, 'update']);
+    Route::get('/mis-mascotas',            [PetController::class, 'index']);
+    Route::get('/mis-mascotas/{id}',       [PetController::class, 'show']);
+    Route::post('/mis-mascotas',           [PetController::class, 'store']);
+    Route::put('/mis-mascotas/{id}',       [PetController::class, 'update']);
     Route::delete('/mis-mascotas/{id}', [PetController::class, 'destroy']);
 
     // Sus citas
