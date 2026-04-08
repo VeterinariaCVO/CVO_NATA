@@ -46,10 +46,9 @@ class WalkInController extends Controller
         $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
 
         // Notificar a todos los veterinarios activos
-        User::where('role_id', 4)
-            ->where('active', true)
-            ->get()
-            ->each(fn($vet) => $vet->notify(new WalkInCreated($appointment)));
+        User::veterinarios()->each(
+    fn($vet) => $vet->notify(new WalkInCreated($appointment))
+);
 
         // Notificar al dueño de la mascota
         $owner = $appointment->pet?->owner;

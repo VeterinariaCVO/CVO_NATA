@@ -23,7 +23,7 @@ return [
 
 
     'allowed_origins' => [
-        'http://localhost:5173', 'https://natita.me'
+        'http://localhost:5173',  'https://natita.me'
     ],
 
 
