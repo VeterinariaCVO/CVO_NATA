@@ -60,4 +60,11 @@ class User extends Authenticatable
     public function isEmpleado(): bool   { return $this->role_id === 2; }
     public function isCliente(): bool    { return $this->role_id === 3; }
     public function isVeterinario(): bool{ return $this->role_id === 4; }
+
+    public function scopeVeterinarios($query)
+{
+    return $query->where('role_id', 4)->where('active', true);
 }
+
+}
+
