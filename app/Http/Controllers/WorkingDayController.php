@@ -52,6 +52,28 @@ class WorkingDayController extends Controller
         return $this->success(new WorkingDayResource($day), 'Día laboral actualizado');
     }
 
+    // En WorkingDayController
+
+    public function toggle($id)
+    {
+        $day = WorkingDay::with('timeSlots.appointment')->findOrFail($id);
+
+        $newState = !$day->is_open;
+        $day->update(['is_open' => $newState]);
+
+        // Si se cierra, cancelar todas las citas de ese día
+        if (!$newState) {
+            foreach ($day->timeSlots as $slot) {
+                if ($slot->appointment) {
+                    $slot->appointment->update(['status' => 'cancelled']);
+                }
+            }
+        }
+
+        $label = $newState ? 'Día habilitado' : 'Día deshabilitado';
+        return $this->success(new WorkingDayResource($day->fresh()), $label);
+    }
+
     public function destroy($id)
     {
         WorkingDay::findOrFail($id)->delete();

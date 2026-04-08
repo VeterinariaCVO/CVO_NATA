@@ -61,6 +61,9 @@ Route::middleware('auth:sanctum')->group(function () {
 // ─── ADMIN (role 1) ───────────────────────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
 
+    Route::patch('time-slots/{id}/toggle', [TimeSlotController::class, 'toggle']);
+    Route::patch('working-days/{id}/toggle', [WorkingDayController::class, 'toggle']);
+
     // Gestión de usuarios
     Route::get('/admin/users',          [UserController::class, 'index']);
     Route::post('/admin/users',         [UserController::class, 'store']);

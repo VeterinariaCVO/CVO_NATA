@@ -67,6 +67,22 @@ class TimeSlotController extends Controller
         return $this->success(new TimeSlotResource($slot), 'Horario actualizado');
     }
 
+    public function toggle($id)
+    {
+        $slot = TimeSlot::with('appointment')->findOrFail($id);
+
+        $newState = !$slot->is_open;
+        $slot->update(['is_open' => $newState]);
+
+        // Si se cierra y tiene cita reservada, cancelarla
+        if (!$newState && $slot->appointment) {
+            $slot->appointment->update(['status' => 'cancelled']);
+        }
+
+        $label = $newState ? 'Horario habilitado' : 'Horario deshabilitado';
+        return $this->success(new TimeSlotResource($slot->fresh()), $label);
+    }
+
     public function destroy($id)
     {
         TimeSlot::findOrFail($id)->delete();
