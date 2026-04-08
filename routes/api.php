@@ -91,9 +91,9 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::post('/walk-in',               [WalkInController::class, 'store']);
 
     // Mascotas (gestión completa)
-    Route::get('/admin/pets',          [PetController::class, 'index']);
+    Route::get('/admin1/pets',          [PetController::class, 'index']);
     Route::post('/admin/pets',         [PetController::class, 'store']);
-    Route::get('/admin/pets/{id}',     [PetController::class, 'show']);
+    Route::get('/admin1/pets/{id}',     [PetController::class, 'show']);
     Route::put('/admin/pets/{id}',     [PetController::class, 'update']);
     Route::delete('/admin/pets/{id}',  [PetController::class, 'destroy']);
 });
