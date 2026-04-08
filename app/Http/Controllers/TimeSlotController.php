@@ -23,6 +23,11 @@ class TimeSlotController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Filtrar por is_open si se envía el parámetro
+        if ($request->filled('is_open')) {
+            $query->where('is_open', filter_var($request->is_open, FILTER_VALIDATE_BOOLEAN));
+        }
+
         // Nunca devolver slots de hoy o días pasados
         $query->whereHas('workingDay', function ($q) {
             $q->where('date', '>', now()->toDateString());
@@ -39,6 +44,7 @@ class TimeSlotController extends Controller
             'working_day_id' => 'required|exists:working_days,id',
             'start_time'     => 'required|date_format:H:i',
             'end_time'       => 'required|date_format:H:i|after:start_time',
+            'is_open'        => 'sometimes|boolean', // ← agregado
         ]);
 
         $slot = TimeSlot::create($data);
@@ -56,10 +62,12 @@ class TimeSlotController extends Controller
     public function update(Request $request, $id)
     {
         $slot = TimeSlot::findOrFail($id);
+
         $data = $request->validate([
             'start_time' => 'sometimes|date_format:H:i',
             'end_time'   => 'sometimes|date_format:H:i|after:start_time',
             'status'     => 'sometimes|in:available,reserved',
+            'is_open'    => 'sometimes|boolean', // ← agregado
         ]);
 
         $slot->update($data);
@@ -69,14 +77,16 @@ class TimeSlotController extends Controller
 
     public function toggle($id)
     {
-        $slot = TimeSlot::with('appointment')->findOrFail($id);
+        $slot = TimeSlot::with('appointments')->findOrFail($id);
 
         $newState = !$slot->is_open;
         $slot->update(['is_open' => $newState]);
 
-        // Si se cierra y tiene cita reservada, cancelarla
-        if (!$newState && $slot->appointment) {
-            $slot->appointment->update(['status' => 'cancelled']);
+        // Si se cierra y tiene citas reservadas, cancelarlas
+        if (!$newState && $slot->appointments->isNotEmpty()) {
+            $slot->appointments()
+                ->where('status', 'reserved')
+                ->update(['status' => 'cancelled']);
         }
 
         $label = $newState ? 'Horario habilitado' : 'Horario deshabilitado';

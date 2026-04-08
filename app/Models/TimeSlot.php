@@ -6,8 +6,17 @@ use Illuminate\Database\Eloquent\Model;
 
 class TimeSlot extends Model
 {
+    protected $fillable = [
+        'working_day_id',
+        'start_time',
+        'end_time',
+        'status',
+        'is_open',
+    ];
 
-    protected $fillable = ['working_day_id', 'start_time', 'end_time', 'status'];
+    protected $casts = [
+        'is_open' => 'boolean',
+    ];
 
     public function workingDay()
     {

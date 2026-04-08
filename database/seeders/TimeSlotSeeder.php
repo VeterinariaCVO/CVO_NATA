@@ -11,7 +11,6 @@ class TimeSlotSeeder extends Seeder
 {
     public function run(): void
     {
-        // Horarios base: 9:00 a 18:00 en bloques de 30 minutos
         $slots = [
             ['start' => '09:00', 'end' => '09:30'],
             ['start' => '09:30', 'end' => '10:00'],
@@ -41,6 +40,7 @@ class TimeSlotSeeder extends Seeder
                     [
                         'end_time' => $slot['end'],
                         'status'   => 'available',
+                        'is_open'  => true,
                     ]
                 );
             }
