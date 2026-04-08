@@ -13,6 +13,8 @@ use App\Notifications\AppointmentCreated;
 use App\Notifications\AppointmentStatusChanged;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Notifications\NewAppointmentAssigned;
+use App\Models\User;
 
 class AppointmentController extends Controller
 {
@@ -57,44 +59,58 @@ class AppointmentController extends Controller
         );
     }
 
-    public function store(AppointmentRequest $request)
-    {
-        $slot = TimeSlot::findOrFail($request->time_slot_id);
+   public function store(AppointmentRequest $request)
+{
+    $slot = TimeSlot::findOrFail($request->time_slot_id);
 
-        if ($slot->status === 'reserved') {
-            return $this->error('El horario seleccionado ya no está disponible.', 400);
-        }
+    if ($slot->status === 'reserved') {
+        return $this->error('El horario seleccionado ya no está disponible.', 400);
+    }
 
-        $appointment = Appointment::create([
-            'pet_id'       => $request->pet_id,
-            'time_slot_id' => $request->time_slot_id,
-            'service_id'   => $request->service_id,
-            'status'       => 'pending',
-            'is_walk_in'   => false,
-            'notes'        => $request->notes,
-            'created_by'   => Auth::id(),
-        ]);
+    $appointment = Appointment::create([
+        'pet_id'       => $request->pet_id,
+        'time_slot_id' => $request->time_slot_id,
+        'service_id'   => $request->service_id,
+        'status'       => 'pending',
+        'is_walk_in'   => false,
+        'notes'        => $request->notes,
+        'created_by'   => Auth::id(),
+    ]);
 
-        $slot->update(['status' => 'reserved']);
-
-        $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
+    $slot->update(['status' => 'reserved']);
+    $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
 
         $owner = $appointment->pet->owner;
         if ($owner) {
             $owner->notify(new AppointmentCreated($appointment));
         }
+    // Notificar al dueño
+    $owner = $appointment->pet->owner;
+    if ($owner) {
+        $owner->notify(new AppointmentCreated($appointment));
+    }
 
         $creator = Auth::user();
         if ($creator && $owner && $creator->id !== $owner->id) {
             $creator->notify(new AppointmentCreated($appointment));
         }
-
-        return $this->success(
-            new AppointmentResource($appointment),
-            'Cita registrada correctamente',
-            201
-        );
+    // Notificar al creador si no es el dueño
+    $creator = Auth::user();
+    if ($creator && $owner && $creator->id !== $owner->id) {
+        $creator->notify(new AppointmentCreated($appointment));
     }
+
+    // Notificar a todos los veterinarios
+    User::veterinarios()->each(
+        fn($vet) => $vet->notify(new NewAppointmentAssigned($appointment))
+    );
+
+    return $this->success(
+        new AppointmentResource($appointment),
+        'Cita registrada correctamente',
+        201
+    );
+}
 
     public function show($id)
     {
