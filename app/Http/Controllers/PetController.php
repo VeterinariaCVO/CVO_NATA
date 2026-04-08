@@ -19,7 +19,6 @@ class PetController extends Controller
         $user  = Auth::user();
         $query = Pet::with('owner');
 
-        // Cliente: solo ve sus propias mascotas
         if ($user->isCliente()) {
             $query->where('owner_id', $user->id);
         }
@@ -34,6 +33,8 @@ class PetController extends Controller
 
         return $this->success(PetResource::collection($query->orderBy('name')->get()));
     }
+
+
 
     public function show($id)
     {
@@ -61,7 +62,15 @@ class PetController extends Controller
             'Mascota registrada exitosamente',
             201
         );
+        if (Auth::user()->isCliente()) {
+        $total = Pet::where('owner_id', Auth::id())->count();
+        if ($total >= 8) {
+        return $this->error('Has alcanzado el límite de 8 mascotas.', 422);
+             }
+        }
     }
+
+
 
     public function update(PetRequest $request, $id)
     {

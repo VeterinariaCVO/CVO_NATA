@@ -6,9 +6,9 @@ use App\Models\Appointment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\BroadcastMessage;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 
-class WalkInCreated extends Notification implements ShouldBroadcastNow
+class WalkInCreated extends Notification implements ShouldBroadcast
 {
     use Queueable;
 
