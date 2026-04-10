@@ -81,12 +81,20 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::delete('/admin/services/{id}',  [ServiceController::class, 'destroy']);
 
     // Gestión de calendario
-    Route::post('/working-days',           [WorkingDayController::class, 'store']);
-    Route::put('/working-days/{id}',       [WorkingDayController::class, 'update']);
-    Route::delete('/working-days/{id}',    [WorkingDayController::class, 'destroy']);
-    Route::post('/time-slots',             [TimeSlotController::class, 'store']);
-    Route::put('/time-slots/{id}',         [TimeSlotController::class, 'update']);
-    Route::delete('/time-slots/{id}',      [TimeSlotController::class, 'destroy']);
+    // Working Days
+    Route::get('working-days', [WorkingDayController::class, 'index']);
+    Route::post('working-days/generate-month', [WorkingDayController::class, 'generateMonth']);
+    Route::get('working-days/{workingDay}', [WorkingDayController::class, 'show']);
+    Route::patch('working-days/{workingDay}/toggle-open', [WorkingDayController::class, 'toggleOpen']);
+    Route::delete('working-days/{workingDay}', [WorkingDayController::class, 'destroy']);
+
+    // Time Slots (anidados bajo working-days)
+    Route::get('working-days/{workingDay}/time-slots', [TimeSlotController::class, 'index']);
+    Route::get('time-slots/{timeSlot}', [TimeSlotController::class, 'show']);
+    Route::patch('time-slots/{timeSlot}/toggle-open', [TimeSlotController::class, 'toggleOpen']);
+    Route::patch('time-slots/{timeSlot}/status', [TimeSlotController::class, 'updateStatus']);
+    Route::patch('working-days/{workingDay}/time-slots/disable-all', [TimeSlotController::class, 'disableAllForDay']);
+    Route::patch('working-days/{workingDay}/time-slots/enable-all', [TimeSlotController::class, 'enableAllForDay']);
 
     // Walk-in
     Route::post('/walk-in',               [WalkInController::class, 'store']);

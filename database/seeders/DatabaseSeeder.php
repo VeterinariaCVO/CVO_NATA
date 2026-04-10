@@ -12,11 +12,7 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             UserSeeder::class,
             ServiceSeeder::class,
-            WorkingDaySeeder::class,
-            TimeSlotSeeder::class,
-            PetSeeder::class,
-            AppointmentSeeder::class,
-
+            PetSeeder::class
         ]);
     }
 }

@@ -2,100 +2,101 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\TimeSlotResource;
-use App\Http\Traits\ApiResponse;
 use App\Models\TimeSlot;
+use App\Models\WorkingDay;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class TimeSlotController extends Controller
 {
-    use ApiResponse;
-
-    public function index(Request $request)
+    /**
+     * Listar todos los time slots de un día laboral específico
+     */
+    public function index(WorkingDay $workingDay): JsonResponse
     {
-        $query = TimeSlot::with('workingDay');
+        $slots = $workingDay->timeSlots()->orderBy('start_time')->get();
 
-        if ($request->filled('working_day_id')) {
-            $query->where('working_day_id', $request->working_day_id);
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        // Filtrar por is_open si se envía el parámetro
-        if ($request->filled('is_open')) {
-            $query->where('is_open', filter_var($request->is_open, FILTER_VALIDATE_BOOLEAN));
-        }
-
-        // Nunca devolver slots de hoy o días pasados
-        $query->whereHas('workingDay', function ($q) {
-            $q->where('date', '>', now()->toDateString());
-        });
-
-        return $this->success(
-            TimeSlotResource::collection($query->orderBy('start_time')->get())
-        );
+        return response()->json($slots);
     }
 
-    public function store(Request $request)
+    /**
+     * Mostrar un time slot específico
+     */
+    public function show(TimeSlot $timeSlot): JsonResponse
     {
-        $data = $request->validate([
-            'working_day_id' => 'required|exists:working_days,id',
-            'start_time'     => 'required|date_format:H:i',
-            'end_time'       => 'required|date_format:H:i|after:start_time',
-            'is_open'        => 'sometimes|boolean', // ← agregado
+        return response()->json($timeSlot);
+    }
+
+    /**
+     * Habilitar o deshabilitar un time slot
+     */
+    public function toggleOpen(TimeSlot $timeSlot): JsonResponse
+    {
+        // No permitir habilitar un slot que ya está reservado
+        if ($timeSlot->status === 'reserved' && !$timeSlot->is_open) {
+            return response()->json([
+                'message' => 'No se puede habilitar un slot reservado.',
+            ], 422);
+        }
+
+        $timeSlot->update(['is_open' => !$timeSlot->is_open]);
+
+        return response()->json([
+            'message'    => 'Estado del slot actualizado.',
+            'start_time' => $timeSlot->start_time,
+            'end_time'   => $timeSlot->end_time,
+            'is_open'    => $timeSlot->is_open,
+        ]);
+    }
+
+    /**
+     * Cambiar el status de un time slot (available <-> reserved)
+     */
+    public function updateStatus(Request $request, TimeSlot $timeSlot): JsonResponse
+    {
+        $request->validate([
+            'status' => 'required|in:available,reserved',
         ]);
 
-        $slot = TimeSlot::create($data);
-
-        return $this->success(new TimeSlotResource($slot->load('workingDay')), 'Horario creado', 201);
-    }
-
-    public function show($id)
-    {
-        return $this->success(
-            new TimeSlotResource(TimeSlot::with('workingDay')->findOrFail($id))
-        );
-    }
-
-    public function update(Request $request, $id)
-    {
-        $slot = TimeSlot::findOrFail($id);
-
-        $data = $request->validate([
-            'start_time' => 'sometimes|date_format:H:i',
-            'end_time'   => 'sometimes|date_format:H:i|after:start_time',
-            'status'     => 'sometimes|in:available,reserved',
-            'is_open'    => 'sometimes|boolean', // ← agregado
-        ]);
-
-        $slot->update($data);
-
-        return $this->success(new TimeSlotResource($slot), 'Horario actualizado');
-    }
-
-    public function toggle($id)
-    {
-        $slot = TimeSlot::with('appointments')->findOrFail($id);
-
-        $newState = !$slot->is_open;
-        $slot->update(['is_open' => $newState]);
-
-        // Si se cierra y tiene citas reservadas, cancelarlas
-        if (!$newState && $slot->appointments->isNotEmpty()) {
-            $slot->appointments()
-                ->where('status', 'reserved')
-                ->update(['status' => 'cancelled']);
+        if (!$timeSlot->is_open) {
+            return response()->json([
+                'message' => 'No se puede modificar un slot deshabilitado.',
+            ], 422);
         }
 
-        $label = $newState ? 'Horario habilitado' : 'Horario deshabilitado';
-        return $this->success(new TimeSlotResource($slot->fresh()), $label);
+        $timeSlot->update(['status' => $request->status]);
+
+        return response()->json([
+            'message' => 'Status del slot actualizado.',
+            'slot'    => $timeSlot,
+        ]);
     }
 
-    public function destroy($id)
+    /**
+     * Deshabilitar todos los slots de un día de golpe
+     */
+    public function disableAllForDay(WorkingDay $workingDay): JsonResponse
     {
-        TimeSlot::findOrFail($id)->delete();
-        return $this->success(null, 'Horario eliminado');
+        $workingDay->timeSlots()
+            ->where('status', 'available')
+            ->update(['is_open' => false]);
+
+        return response()->json([
+            'message' => "Todos los slots disponibles del día {$workingDay->date} fueron deshabilitados.",
+        ]);
+    }
+
+    /**
+     * Habilitar todos los slots de un día de golpe
+     */
+    public function enableAllForDay(WorkingDay $workingDay): JsonResponse
+    {
+        $workingDay->timeSlots()
+            ->where('status', 'available')
+            ->update(['is_open' => true]);
+
+        return response()->json([
+            'message' => "Todos los slots disponibles del día {$workingDay->date} fueron habilitados.",
+        ]);
     }
 }
