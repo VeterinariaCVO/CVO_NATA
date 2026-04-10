@@ -12,7 +12,7 @@ class PerfilController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => Auth::user()
+            'data'    => Auth::user()
         ]);
     }
 
@@ -21,16 +21,16 @@ class PerfilController extends Controller
         $user = Auth::user();
 
         $request->validate([
-            'name'          => 'required|string|min:2|max:100',
-            'email'         => 'required|email|unique:users,email,' . $user->id,
-            'phone'         => 'nullable|digits:10',
-            'address'       => 'nullable|string|max:255',
-            'gender'        => 'nullable|in:M,F,O',
-            'birth_date'    => 'nullable|date|before:today',
-            'photo'         => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
-            'remove_photo'  => 'nullable',
-            'current_password'      => 'nullable|required_with:password',
-            'password'              => 'nullable|min:8|confirmed',
+            'name'             => 'required|string|min:2|max:100',
+            'email'            => 'required|email|unique:users,email,' . $user->id,
+            'phone'            => 'nullable|digits:10',
+            'address'          => 'nullable|string|max:255',
+            'gender'           => 'nullable|in:masculino,femenino',
+            'birth_date'       => 'nullable|date|before:today',
+            'profile_photo'    => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'remove_photo'     => 'nullable',
+            'current_password' => 'nullable|required_with:password',
+            'password'         => 'nullable|min:8|confirmed',
         ]);
 
         $user->name       = $request->name;
@@ -50,13 +50,17 @@ class PerfilController extends Controller
             $user->password = Hash::make($request->password);
         }
 
-        if ($request->hasFile('photo')) {
-            if ($user->profile_photo) Storage::disk('public')->delete($user->profile_photo);
-            $user->profile_photo = $request->file('photo')->store('profiles', 'public');
+        if ($request->hasFile('profile_photo')) {
+            if ($user->profile_photo) {
+                Storage::disk('public')->delete($user->profile_photo);
+            }
+            $user->profile_photo = $request->file('profile_photo')->store('profiles', 'public');
         }
 
         if ($request->remove_photo) {
-            if ($user->profile_photo) Storage::disk('public')->delete($user->profile_photo);
+            if ($user->profile_photo) {
+                Storage::disk('public')->delete($user->profile_photo);
+            }
             $user->profile_photo = null;
         }
 
@@ -73,6 +77,10 @@ class PerfilController extends Controller
     {
         $user = Auth::user();
         $user->delete();
-        return response()->json(['success' => true, 'message' => 'Cuenta eliminada.']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cuenta eliminada.'
+        ]);
     }
 }

@@ -9,20 +9,15 @@ use App\Models\Appointment;
 use App\Models\TimeSlot;
 use App\Models\User;
 use App\Notifications\AppointmentCreated;
-use App\Notifications\WalkInCreated;
+use App\Notifications\WalkInRegistered;
 use Illuminate\Support\Facades\Auth;
 
 class WalkInController extends Controller
 {
     use ApiResponse;
 
-    // CU-20: Registrar atención sin cita.
-    // Actor: Empleado (role 2) o Admin (role 1).
-    // Entra directo en status = in_progress.
-
     public function store(WalkInRequest $request)
     {
-        // Si viene un slot, verificar que esté disponible
         if ($request->filled('time_slot_id')) {
             $slot = TimeSlot::findOrFail($request->time_slot_id);
 
@@ -45,10 +40,13 @@ class WalkInController extends Controller
 
         $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
 
-        // Notificar a todos los veterinarios activos
-        User::veterinarios()->each(
-    fn($vet) => $vet->notify(new WalkInCreated($appointment))
-);
+
+        // Notificar a todos los veterinarios activos y admins
+        User::where('role_id', 4)->where('active', true)->get()
+            ->each(fn($vet) => $vet->notify(new WalkInRegistered($appointment)));
+
+        User::where('role_id', 1)->where('active', true)->get()
+            ->each(fn($admin) => $admin->notify(new WalkInRegistered($appointment)));
 
         // Notificar al dueño de la mascota
         $owner = $appointment->pet?->owner;
