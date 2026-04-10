@@ -7,11 +7,12 @@ use App\Http\Requests\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\User;
+use App\Notifications\NewClientRegistered;
 use App\Notifications\UserRegistered;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
-class  ApiAuthController extends Controller
+class ApiAuthController extends Controller
 {
     use ApiResponse;
 
@@ -27,7 +28,12 @@ class  ApiAuthController extends Controller
             'active'   => true,
         ]);
 
+        // Notificación de bienvenida al cliente
         $user->notify(new UserRegistered($user));
+
+        // Notificar a recepcionistas y admin del nuevo registro
+        User::whereIn('role_id', [1, 2])->where('active', true)->get()
+            ->each(fn($u) => $u->notify(new NewClientRegistered($user)));
 
         return $this->success(
             new UserResource($user->load('role')),
