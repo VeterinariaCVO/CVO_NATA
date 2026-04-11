@@ -82,19 +82,19 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
 
     // Gestión de calendario
     // Working Days
-    Route::get('working-days', [WorkingDayController::class, 'index']);
-    Route::post('working-days/generate-month', [WorkingDayController::class, 'generateMonth']);
-    Route::get('working-days/{workingDay}', [WorkingDayController::class, 'show']);
-    Route::patch('working-days/{workingDay}/toggle-open', [WorkingDayController::class, 'toggleOpen']);
-    Route::delete('working-days/{workingDay}', [WorkingDayController::class, 'destroy']);
+    Route::get('/admin/working-days', [WorkingDayController::class, 'index']);
+    Route::post('/admin/working-days/generate-month', [WorkingDayController::class, 'generateMonth']);
+    Route::get('/admin/working-days/{workingDay}', [WorkingDayController::class, 'show']);
+    Route::patch('/admin/working-days/{workingDay}/toggle-open', [WorkingDayController::class, 'toggleOpen']);
+    Route::delete('/admin/working-days/{workingDay}', [WorkingDayController::class, 'destroy']);
 
     // Time Slots (anidados bajo working-days)
-    Route::get('working-days/{workingDay}/time-slots', [TimeSlotController::class, 'index']);
-    Route::get('time-slots/{timeSlot}', [TimeSlotController::class, 'show']);
-    Route::patch('time-slots/{timeSlot}/toggle-open', [TimeSlotController::class, 'toggleOpen']);
-    Route::patch('time-slots/{timeSlot}/status', [TimeSlotController::class, 'updateStatus']);
-    Route::patch('working-days/{workingDay}/time-slots/disable-all', [TimeSlotController::class, 'disableAllForDay']);
-    Route::patch('working-days/{workingDay}/time-slots/enable-all', [TimeSlotController::class, 'enableAllForDay']);
+    Route::get('/admin/working-days/{workingDay}/time-slots', [TimeSlotController::class, 'index']);
+    Route::get('/admin/time-slots/{timeSlot}', [TimeSlotController::class, 'show']);
+    Route::patch('/admin/time-slots/{timeSlot}/toggle-open', [TimeSlotController::class, 'toggleOpen']);
+    Route::patch('/admin/time-slots/{timeSlot}/status', [TimeSlotController::class, 'updateStatus']);
+    Route::patch('/admin/working-days/{workingDay}/time-slots/disable-all', [TimeSlotController::class, 'disableAllForDay']);
+    Route::patch('/admin/working-days/{workingDay}/time-slots/enable-all', [TimeSlotController::class, 'enableAllForDay']);
 
     // Walk-in
     Route::post('/walk-in',               [WalkInController::class, 'store']);

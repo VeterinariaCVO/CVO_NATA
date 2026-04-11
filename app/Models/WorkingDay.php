@@ -8,13 +8,10 @@ class WorkingDay extends Model
 {
       protected $fillable = ['date', 'is_open'];
 
-    protected function casts(): array
-    {
-        return [
-            'date'    => 'date',
-            'is_open' => 'boolean',
-        ];
-    }
+    protected $casts = [
+        'date' => 'date:Y-m-d',  // ← fuerza que salga como string simple
+        'is_open' => 'boolean',
+    ];
 
     public function timeSlots()
     {
