@@ -10,9 +10,6 @@ use Carbon\Carbon;
 
 class WorkingDayController extends Controller
 {
-    /**
-     * Listar todos los días laborales (con sus time slots)
-     */
     public function index(Request $request): JsonResponse
     {
         $query = WorkingDay::with('timeSlots');
@@ -27,9 +24,6 @@ class WorkingDayController extends Controller
         return response()->json($workingDays);
     }
 
-    /**
-     * Generar un mes completo de días laborales con sus time slots
-     */
     public function generateMonth(Request $request): JsonResponse
     {
         $request->validate([
@@ -51,7 +45,6 @@ class WorkingDayController extends Controller
         while ($current->lte($endDate)) {
             $dateStr = $current->toDateString();
 
-            // Sábado = 6, Domingo = 0
             $isOpen = !in_array($current->dayOfWeek, [Carbon::SATURDAY, Carbon::SUNDAY]);
 
             $workingDay = WorkingDay::firstOrCreate(
@@ -60,7 +53,6 @@ class WorkingDayController extends Controller
             );
 
             if ($workingDay->wasRecentlyCreated) {
-                // Generar time slots solo si el día fue creado nuevo
                 $this->generateTimeSlotsForDay($workingDay);
                 $created[] = $dateStr;
             } else {
@@ -77,9 +69,6 @@ class WorkingDayController extends Controller
         ], 201);
     }
 
-    /**
-     * Mostrar un día laboral específico con sus time slots
-     */
     public function show(WorkingDay $workingDay): JsonResponse
     {
         $workingDay->load('timeSlots');
@@ -87,23 +76,23 @@ class WorkingDayController extends Controller
         return response()->json($workingDay);
     }
 
-    /**
-     * Habilitar o deshabilitar un día laboral
-     */
     public function toggleOpen(WorkingDay $workingDay): JsonResponse
     {
-        $workingDay->update(['is_open' => !$workingDay->is_open]);
+        $newState = !$workingDay->is_open;
+
+        $workingDay->update(['is_open' => $newState]);
+
+        $workingDay->timeSlots()
+            ->where('status', 'available')
+            ->update(['is_open' => $newState]);
 
         return response()->json([
-            'message'  => 'Estado del día actualizado.',
-            'date'     => $workingDay->date,
-            'is_open'  => $workingDay->is_open,
+            'message' => 'Estado del día actualizado.',
+            'date'    => $workingDay->date,
+            'is_open' => $workingDay->is_open,
         ]);
     }
 
-    /**
-     * Eliminar un día laboral (y sus time slots por cascade)
-     */
     public function destroy(WorkingDay $workingDay): JsonResponse
     {
         $workingDay->delete();
@@ -111,9 +100,6 @@ class WorkingDayController extends Controller
         return response()->json(['message' => 'Día laboral eliminado.']);
     }
 
-    /**
-     * Helper privado: genera los time slots de 30 en 30 min (09:00 - 18:00)
-     */
     private function generateTimeSlotsForDay(WorkingDay $workingDay): void
     {
         $start = Carbon::createFromTimeString('09:00');
@@ -121,7 +107,6 @@ class WorkingDayController extends Controller
 
         $slots = [];
         $now   = now();
-
         $current = $start->copy();
 
         while ($current->lt($end)) {
@@ -132,7 +117,7 @@ class WorkingDayController extends Controller
                 'start_time'     => $current->format('H:i:s'),
                 'end_time'       => $slotEnd->format('H:i:s'),
                 'status'         => 'available',
-                'is_open'        => true,
+                'is_open'        => $workingDay->is_open,
                 'created_at'     => $now,
                 'updated_at'     => $now,
             ];

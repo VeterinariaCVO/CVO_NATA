@@ -9,9 +9,6 @@ use Illuminate\Http\JsonResponse;
 
 class TimeSlotController extends Controller
 {
-    /**
-     * Listar todos los time slots de un día laboral específico
-     */
     public function index(WorkingDay $workingDay): JsonResponse
     {
         $slots = $workingDay->timeSlots()->orderBy('start_time')->get();
@@ -19,27 +16,25 @@ class TimeSlotController extends Controller
         return response()->json($slots);
     }
 
-    /**
-     * Mostrar un time slot específico
-     */
     public function show(TimeSlot $timeSlot): JsonResponse
     {
         return response()->json($timeSlot);
     }
 
-    /**
-     * Habilitar o deshabilitar un time slot
-     */
     public function toggleOpen(TimeSlot $timeSlot): JsonResponse
     {
-        // No permitir habilitar un slot que ya está reservado
         if ($timeSlot->status === 'reserved' && !$timeSlot->is_open) {
             return response()->json([
                 'message' => 'No se puede habilitar un slot reservado.',
             ], 422);
         }
 
-        $timeSlot->update(['is_open' => !$timeSlot->is_open]);
+        $newState = !$timeSlot->is_open;
+        $timeSlot->update(['is_open' => $newState]);
+
+        if ($newState) {
+            $timeSlot->workingDay->update(['is_open' => true]);
+        }
 
         return response()->json([
             'message'    => 'Estado del slot actualizado.',
@@ -49,9 +44,6 @@ class TimeSlotController extends Controller
         ]);
     }
 
-    /**
-     * Cambiar el status de un time slot (available <-> reserved)
-     */
     public function updateStatus(Request $request, TimeSlot $timeSlot): JsonResponse
     {
         $request->validate([
@@ -72,9 +64,6 @@ class TimeSlotController extends Controller
         ]);
     }
 
-    /**
-     * Deshabilitar todos los slots de un día de golpe
-     */
     public function disableAllForDay(WorkingDay $workingDay): JsonResponse
     {
         $workingDay->timeSlots()
@@ -86,9 +75,6 @@ class TimeSlotController extends Controller
         ]);
     }
 
-    /**
-     * Habilitar todos los slots de un día de golpe
-     */
     public function enableAllForDay(WorkingDay $workingDay): JsonResponse
     {
         $workingDay->timeSlots()
