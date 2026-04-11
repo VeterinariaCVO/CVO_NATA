@@ -27,4 +27,9 @@ class TimeSlot extends Model
     {
         return $this->hasMany(Appointment::class);
     }
+
+    public function appointment()
+    {
+        return $this->hasOne(Appointment::class)->whereIn('status', ['pending', 'confirmed', 'in_progress']);
+    }
 }

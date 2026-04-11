@@ -86,6 +86,26 @@ class WorkingDayController extends Controller
             ->where('status', 'available')
             ->update(['is_open' => $newState]);
 
+        if (!$newState) {
+            $workingDay->timeSlots()
+                ->where('status', 'reserved')
+                ->with('appointment.pet.owner')
+                ->get()
+                ->each(function ($slot) {
+                    $appointment = $slot->appointment;
+
+                    if ($appointment) {
+                        $appointment->update(['status' => 'cancelled']);
+                        $slot->update(['status' => 'available', 'is_open' => false]);
+
+                        $owner = $appointment->pet?->owner;
+                        if ($owner) {
+                            $owner->notify(new \App\Notifications\AppointmentCancelled($appointment));
+                        }
+                    }
+                });
+        }
+
         return response()->json([
             'message' => 'Estado del día actualizado.',
             'date'    => $workingDay->date,

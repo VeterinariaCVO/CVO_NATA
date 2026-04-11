@@ -32,6 +32,19 @@ class TimeSlotController extends Controller
         $newState = !$timeSlot->is_open;
         $timeSlot->update(['is_open' => $newState]);
 
+        if (!$newState && $timeSlot->status === 'reserved') {
+            $appointment = $timeSlot->appointment;
+            if ($appointment) {
+                $appointment->update(['status' => 'cancelled']);
+                $timeSlot->update(['status' => 'available']);
+
+                $owner = $appointment->pet?->owner;
+                if ($owner) {
+                    $owner->notify(new \App\Notifications\AppointmentCancelled($appointment));
+                }
+            }
+        }
+
         if ($newState) {
             $timeSlot->workingDay->update(['is_open' => true]);
         }

@@ -143,14 +143,12 @@ class AppointmentController extends Controller
         $oldSlotId   = $appointment->time_slot_id;
         $user        = Auth::user();
 
-        // Cliente solo puede modificar sus propias citas
         if ($user->isCliente() && $appointment->pet->owner_id !== $user->id) {
             return $this->error('No autorizado.', 403);
         }
 
         $oldStatus = $appointment->status;
 
-        // Solo cambiar slot si viene en el request
         $wasRescheduled = false; // bandera para detectar reagendamiento
         if ($request->filled('time_slot_id') && $request->time_slot_id != $appointment->time_slot_id) {
             $newSlot = TimeSlot::findOrFail($request->time_slot_id);
@@ -160,7 +158,10 @@ class AppointmentController extends Controller
             }
 
             if ($appointment->time_slot_id) {
-                TimeSlot::find($appointment->time_slot_id)?->update(['status' => 'available']);
+                TimeSlot::find($appointment->time_slot_id)?->update([
+                    'status'  => 'available',
+                    'is_open' => true,
+                ]);
             }
 
             $newSlot->update(['status' => 'reserved']);
@@ -178,7 +179,6 @@ class AppointmentController extends Controller
         $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service']);
         $owner = $appointment->pet?->owner;
 
-        // Si se cambió el slot, notificar reagendamiento a cliente y staff
         if ($wasRescheduled) {
             if ($owner) {
                 $owner->notify(new AppointmentRescheduled($appointment));
@@ -189,18 +189,15 @@ class AppointmentController extends Controller
 
         if ($request->filled('status') && $request->status !== $oldStatus) {
 
-            // Notificación general de cambio de estado al dueño
             if ($owner) {
                 $owner->notify(new AppointmentStatusChanged($appointment));
             }
 
-            // Si se confirma la cita, notificar a todos los veterinarios activos
             if ($request->status === 'confirmed') {
                 User::where('role_id', 4)->where('active', true)->get()
                     ->each(fn($vet) => $vet->notify(new AppointmentConfirmedVet($appointment)));
             }
 
-            // Si se cancela desde update (por admin/recep), notificar al staff
             if ($request->status === 'cancelled') {
                 User::whereIn('role_id', [1, 2])->where('active', true)->get()
                     ->each(fn($u) => $u->notify(new AppointmentCancelledAlert($appointment, Auth::user())));
@@ -229,9 +226,11 @@ class AppointmentController extends Controller
             return $this->error('Esta cita no puede cancelarse en su estado actual.', 422);
         }
 
-        // Liberar el slot
         if ($appointment->time_slot_id) {
-            TimeSlot::find($appointment->time_slot_id)?->update(['status' => 'available']);
+            TimeSlot::find($appointment->time_slot_id)?->update([
+                'status'  => 'available',
+                'is_open' => true,
+            ]);
         }
 
         $appointment->update(['status' => 'cancelled']);
