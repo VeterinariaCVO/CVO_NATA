@@ -8,8 +8,7 @@ use App\Http\Resources\AppointmentResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\Appointment;
 use App\Models\TimeSlot;
-use App\Models\VwCita;
-use App\Models\VwReporteCita;
+use App\Models\User;
 use App\Notifications\AppointmentCancelled;
 use App\Notifications\AppointmentCancelledAlert;
 use App\Notifications\AppointmentConfirmedVet;
@@ -19,8 +18,7 @@ use App\Notifications\AppointmentRescheduled;
 use App\Notifications\AppointmentStatusChanged;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Notifications\NewAppointmentAssigned;
-use App\Models\User;
+use Illuminate\Notifications\Notification;
 
 class AppointmentController extends Controller
 {
@@ -36,13 +34,35 @@ class AppointmentController extends Controller
         ]);
     }
 
+    /**
+     * Evita enviar la misma notificación más de una vez
+     * al mismo usuario para la misma cita y tipo.
+     */
+    private function notifyOnce($notifiable, string $type, int $appointmentId, Notification $notification): void
+    {
+        if (!$notifiable) {
+            return;
+        }
+
+        $alreadyExists = $notifiable->notifications()
+            ->where('data->type', $type)
+            ->where('data->appointment_id', $appointmentId)
+            ->exists();
+
+        if ($alreadyExists) {
+            return;
+        }
+
+        $notifiable->notify($notification);
+    }
+
     public function index(Request $request)
     {
         $user  = Auth::user();
-        $query = VwCita::query();
+        $query = $this->baseQuery();
 
         if ($user->isCliente()) {
-            $query->where('cliente_id', $user->id);
+            $query->whereHas('pet', fn($q) => $q->where('owner_id', $user->id));
         }
 
         if ($user->isVeterinario()) {
@@ -50,32 +70,20 @@ class AppointmentController extends Controller
         }
 
         if ($request->filled('pet_id')) {
-            $query->where('mascota_id', $request->pet_id);
+            $query->where('pet_id', $request->pet_id);
         }
 
         if ($request->filled('status')) {
             $statuses = is_array($request->status)
                 ? $request->status
                 : explode(',', $request->status);
+
             $query->whereIn('status', $statuses);
         }
 
-        return $this->success($query->orderByDesc('created_at')->get());
-    }
-
-    public function reporte(Request $request)
-    {
-        $query = VwReporteCita::query();
-
-        if ($request->filled('fecha_inicio')) {
-            $query->where('fecha', '>=', $request->fecha_inicio);
-        }
-
-        if ($request->filled('fecha_fin')) {
-            $query->where('fecha', '<=', $request->fecha_fin);
-        }
-
-        return $this->success($query->orderByDesc('fecha')->get());
+        return $this->success(
+            AppointmentResource::collection($query->orderByDesc('created_at')->get())
+        );
     }
 
     public function store(AppointmentRequest $request)
@@ -97,25 +105,49 @@ class AppointmentController extends Controller
         ]);
 
         $slot->update(['status' => 'reserved']);
-        $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
 
-        $owner   = $appointment->pet->owner;
+        $appointment->load([
+            'pet.owner',
+            'timeSlot.workingDay',
+            'service',
+            'creator',
+        ]);
+
+        $owner = $appointment->pet?->owner;
         $creator = Auth::user();
 
+        // Notificar al dueño
         if ($owner) {
-            $owner->notify(new AppointmentCreated($appointment));
+            $this->notifyOnce(
+                $owner,
+                'appointment_created',
+                $appointment->id,
+                new AppointmentCreated($appointment)
+            );
         }
 
-        if ($creator && $owner && $creator->id !== $owner->id) {
-            $creator->notify(new AppointmentCreated($appointment));
+        // Notificar al creador si no es el mismo dueño
+        if ($creator && (!$owner || $creator->id !== $owner->id)) {
+            $this->notifyOnce(
+                $creator,
+                'appointment_created',
+                $appointment->id,
+                new AppointmentCreated($appointment)
+            );
         }
 
-        User::veterinarios()->each(
-            fn($vet) => $vet->notify(new NewAppointmentAssigned($appointment))
-        );
-
-        User::whereIn('role_id', [1, 2])->where('active', true)->get()
-            ->each(fn($u) => $u->notify(new AppointmentPendingAlert($appointment)));
+        // Notificar a recepcionistas y admin que hay una cita pendiente de confirmar
+        User::whereIn('role_id', [1, 2])
+            ->where('active', true)
+            ->get()
+            ->each(function ($user) use ($appointment) {
+                $this->notifyOnce(
+                    $user,
+                    'appointment_pending_alert',
+                    $appointment->id,
+                    new AppointmentPendingAlert($appointment)
+                );
+            });
 
         return $this->success(
             new AppointmentResource($appointment),
@@ -123,16 +155,16 @@ class AppointmentController extends Controller
             201
         );
     }
-
     public function show($id)
     {
         $appointment = $this->baseQuery()->findOrFail($id);
+
         return $this->success(new AppointmentResource($appointment));
     }
 
     public function update(UpdateAppointmentRequest $request, $id)
     {
-        $appointment = Appointment::findOrFail($id);
+        $appointment = Appointment::with(['pet.owner', 'timeSlot.workingDay', 'service', 'creator'])->findOrFail($id);
         $oldStatus   = $appointment->status;
         $user        = Auth::user();
 
@@ -156,54 +188,92 @@ class AppointmentController extends Controller
                 ]);
             }
 
-            $newSlot->update(['status' => 'reserved']);
+            $newSlot->update([
+                'status'  => 'reserved',
+                'is_open' => false,
+            ]);
+
             $wasRescheduled = true;
         }
 
         $appointment->update([
-            'pet_id'       => $request->pet_id       ?? $appointment->pet_id,
+            'pet_id'       => $request->pet_id ?? $appointment->pet_id,
             'time_slot_id' => $request->time_slot_id ?? $appointment->time_slot_id,
-            'service_id'   => $request->service_id   ?? $appointment->service_id,
-            'notes'        => $request->notes        ?? $appointment->notes,
-            'status'       => $request->status       ?? $appointment->status,
+            'service_id'   => $request->service_id ?? $appointment->service_id,
+            'notes'        => $request->notes ?? $appointment->notes,
+            'status'       => $request->status ?? $appointment->status,
         ]);
 
-        $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service']);
+        $appointment->load([
+            'pet.owner',
+            'timeSlot.workingDay',
+            'service',
+            'creator',
+        ]);
+
         $owner = $appointment->pet?->owner;
 
         if ($wasRescheduled) {
             if ($owner) {
-                $owner->notify(new AppointmentRescheduled($appointment));
+                $this->notifyOnce(
+                    $owner,
+                    'appointment_rescheduled',
+                    $appointment->id,
+                    new AppointmentRescheduled($appointment)
+                );
             }
-            User::whereIn('role_id', [1, 2])->where('active', true)->get()
-                ->each(fn($u) => $u->notify(new AppointmentRescheduled($appointment)));
+
+            User::whereIn('role_id', [1, 2])
+                ->where('active', true)
+                ->get()
+                ->each(function ($adminOrReception) use ($appointment) {
+                    $this->notifyOnce(
+                        $adminOrReception,
+                        'appointment_rescheduled',
+                        $appointment->id,
+                        new AppointmentRescheduled($appointment)
+                    );
+                });
         }
 
         if ($request->filled('status') && $request->status !== $oldStatus) {
-
-            if ($request->status === 'cancelled' && $appointment->time_slot_id) {
-                TimeSlot::find($appointment->time_slot_id)?->update([
-                    'status'  => 'available',
-                    'is_open' => true,
-                ]);
-            }
-
             if ($owner) {
-                $owner->notify(new AppointmentStatusChanged($appointment));
+                $this->notifyOnce(
+                    $owner,
+                    'appointment_status_changed',
+                    $appointment->id,
+                    new AppointmentStatusChanged($appointment)
+                );
             }
 
             if ($request->status === 'confirmed') {
-                User::where('role_id', 4)->where('active', true)->get()
-                    ->each(fn($vet) => $vet->notify(new AppointmentConfirmedVet($appointment)));
+                User::where('role_id', 4)
+                    ->where('active', true)
+                    ->get()
+                    ->each(function ($vet) use ($appointment) {
+                        $this->notifyOnce(
+                            $vet,
+                            'appointment_confirmed_vet',
+                            $appointment->id,
+                            new AppointmentConfirmedVet($appointment)
+                        );
+                    });
             }
 
             if ($request->status === 'cancelled') {
-                User::whereIn('role_id', [1, 2])->where('active', true)->get()
-                    ->each(fn($u) => $u->notify(new AppointmentCancelledAlert($appointment, Auth::user())));
+                User::whereIn('role_id', [1, 2])
+                    ->where('active', true)
+                    ->get()
+                    ->each(function ($adminOrReception) use ($appointment) {
+                        $this->notifyOnce(
+                            $adminOrReception,
+                            'appointment_cancelled_alert',
+                            $appointment->id,
+                            new AppointmentCancelledAlert($appointment, Auth::user())
+                        );
+                    });
             }
         }
-
-        $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
 
         return $this->success(
             new AppointmentResource($appointment),
@@ -232,14 +302,37 @@ class AppointmentController extends Controller
         }
 
         $appointment->update(['status' => 'cancelled']);
+        $appointment->load([
+            'pet.owner',
+            'timeSlot.workingDay',
+            'service',
+            'creator',
+        ]);
 
         $owner = $appointment->pet?->owner;
+
+        // Notificar al dueño
         if ($owner) {
-            $owner->notify(new AppointmentCancelled($appointment));
+            $this->notifyOnce(
+                $owner,
+                'appointment_cancelled',
+                $appointment->id,
+                new AppointmentCancelled($appointment)
+            );
         }
 
-        User::whereIn('role_id', [1, 2])->where('active', true)->get()
-            ->each(fn($u) => $u->notify(new AppointmentCancelledAlert($appointment, Auth::user())));
+        // Notificar a recepcionistas y admin que se canceló una cita
+        User::whereIn('role_id', [1, 2])
+            ->where('active', true)
+            ->get()
+            ->each(function ($adminOrReception) use ($appointment, $user) {
+                $this->notifyOnce(
+                    $adminOrReception,
+                    'appointment_cancelled_alert',
+                    $appointment->id,
+                    new AppointmentCancelledAlert($appointment, $user)
+                );
+            });
 
         return $this->success(null, 'Cita cancelada correctamente');
     }
