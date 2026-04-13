@@ -91,8 +91,8 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::delete('/admin/pets/{id}', [PetController::class, 'destroy']);
 });
 
-// Appointments for roles 1,2,4
-Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
+// Appointments for roles 1,2,3,4
+Route::middleware(['auth:sanctum', 'role:1,2,3,4'])->group(function () {
     Route::post('/appointments', [AppointmentController::class, 'store']);
     Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
     Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
