@@ -10,7 +10,6 @@ use App\Models\Appointment;
 use App\Models\TimeSlot;
 use App\Models\User;
 use App\Notifications\AppointmentCancelled;
-use App\Notifications\AppointmentCancelledAlert;
 use App\Notifications\AppointmentConfirmedVet;
 use App\Notifications\AppointmentCreated;
 use App\Notifications\AppointmentPendingAlert;
@@ -330,7 +329,7 @@ class AppointmentController extends Controller
                     $adminOrReception,
                     'appointment_cancelled_alert',
                     $appointment->id,
-                    new AppointmentCancelledAlert($appointment, $user)
+                    new AppointmentCancelled($appointment)
                 );
             });
 
