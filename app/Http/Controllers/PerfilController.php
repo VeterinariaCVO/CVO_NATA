@@ -67,10 +67,10 @@ class PerfilController extends Controller
         $user->save();
 
         return response()->json([
-            'success' => true,
-            'message' => 'Perfil actualizado correctamente.',
-            'data'    => $user
-        ]);
+        'success' => true,
+        'message' => 'Perfil actualizado correctamente.',
+        'data'    => new \App\Http\Resources\UserResource($user)
+    ]);
     }
 
     public function destroy()
