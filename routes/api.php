@@ -21,7 +21,7 @@ Route::post('/login',    [ApiAuthController::class, 'login']);
 // ─── AUTENTICADO (cualquier rol) ──────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
 
-     Route::post('/broadcasting/auth', function (\Illuminate\Http\Request $request) {
+    Route::post('/broadcasting/auth', function (\Illuminate\Http\Request $request) {
         return Broadcast::auth($request);
     });
 
@@ -30,8 +30,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Catálogo de servicios (solo activos, lectura)
     Route::get('/services', [ServiceController::class, 'index']);
-
-    Route::get('/petsi', [PetController::class, 'index']);
 
     // Notificaciones
     Route::prefix('notifications')->group(function () {
@@ -42,19 +40,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}',     [NotificationController::class, 'destroy']);
     });
 
-    // Días laborales y horarios (consulta para cualquier rol)
-    Route::get('/working-days',        [WorkingDayController::class, 'index']);
-    Route::get('/working-days/{id}',   [WorkingDayController::class, 'show']);
-    Route::get('/time-slots',          [TimeSlotController::class, 'index']);
-    Route::get('/time-slots/{id}',     [TimeSlotController::class, 'show']);
+    // Días laborales y horarios (lectura para cualquier rol)
+    Route::get('/working-days',         [WorkingDayController::class, 'index']);
+    Route::get('/working-days/{id}',    [WorkingDayController::class, 'show']);
+    Route::get('/time-slots',           [TimeSlotController::class, 'index']);
+    Route::get('/time-slots/{id}',      [TimeSlotController::class, 'show']);
 
-    // Historial médico
-    Route::get('/medical-records',     [MedicalRecordController::class, 'index']);
-    Route::get('/medical-records/{id}',[MedicalRecordController::class, 'show']);
+    // Historial médico (lectura para todos)
+    Route::get('/medical-records',      [MedicalRecordController::class, 'index']);
+    Route::get('/medical-records/{id}', [MedicalRecordController::class, 'show']);
 
-    // Citas (lectura para todos, escritura controlada por rol)
-    Route::get('/appointments',        [AppointmentController::class, 'index']);
-    Route::get('/appointments/{id}',   [AppointmentController::class, 'show']);
+    // Citas (lectura para todos)
+    Route::get('/appointments',         [AppointmentController::class, 'index']);
+    Route::get('/appointments/{id}',    [AppointmentController::class, 'show']);
 });
 
 // ─── ADMIN (role 1) ───────────────────────────────────────────────────────────
@@ -68,8 +66,8 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::delete('/admin/users/{id}',  [UserController::class, 'destroy']);
 
     // Gestión de empleados
-    Route::get('/admin/employees',         [UserController::class, 'employees']);
-    Route::get('/admin/employees/{id}',    [UserController::class, 'showEmployee']);
+    Route::get('/admin/employees',      [UserController::class, 'employees']);
+    Route::get('/admin/employees/{id}', [UserController::class, 'showEmployee']);
 
     // Catálogo de servicios (gestión completa)
     Route::get('/admin/services',          [ServiceController::class, 'indexAdmin']);
@@ -89,61 +87,72 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     // Walk-in
     Route::post('/walk-in',               [WalkInController::class, 'store']);
 
-    // Mascotas (gestión completa)
-    Route::apiResource('/pets', PetController::class);
-});
+    // Mascotas (gestión completa para admin)
+    Route::apiResource('/admin/pets', PetController::class);
 
-//appointments empleado - admin
-Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
+    // Citas (escritura para admin)
     Route::post('/appointments',          [AppointmentController::class, 'store']);
-    Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
-    Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
+    Route::put('/appointments/{id}',      [AppointmentController::class, 'update']);
+    Route::delete('/appointments/{id}',   [AppointmentController::class, 'destroy']);
 });
 
-// ─── EMPLEADO / RECEPCIONISTA (role 2) ────────────────────────────────────────
+// ─── ADMIN + RECEPCIONISTA + VETERINARIO (roles 1, 2, 4) ─────────────────────
+Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
+
+    // Mascotas — lectura compartida (recepcionista necesita buscar por owner_id)
+    Route::get('/pets',      [PetController::class, 'index']);
+    Route::get('/pets/{id}', [PetController::class, 'show']);
+});
+
+// ─── RECEPCIONISTA (role 2) ───────────────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
 
-    // Clientes
-    Route::get('/empleado/clients',       [UserController::class, 'clients']);
-    Route::get('/empleado/clients/{id}',  [UserController::class, 'showClient']);
+    // Clientes — lectura
+    Route::get('/empleado/clients',          [UserController::class, 'clients']);
+    Route::get('/empleado/clients/{id}',     [UserController::class, 'showClient']);
 
-    // Walk-in (CU-20)
-    Route::post('/walk-in',              [WalkInController::class, 'store']);
+    // Clientes — escritura (recepcionista puede registrar, editar y eliminar clientes)
+    Route::post('/empleado/clients',         [UserController::class, 'store']);
+    Route::put('/empleado/clients/{id}',     [UserController::class, 'update']);
+    Route::delete('/empleado/clients/{id}',  [UserController::class, 'destroy']);
 
-    // Mascotas
-    Route::apiResource('/pets', PetController::class);
+    // Mascotas — gestión completa
+    Route::post('/pets',        [PetController::class, 'store']);
+    Route::put('/pets/{id}',    [PetController::class, 'update']);
+    Route::delete('/pets/{id}', [PetController::class, 'destroy']);
+
+    // Walk-in
+    Route::post('/walk-in',     [WalkInController::class, 'store']);
+
+    // Citas — escritura para recepcionista
+    Route::post('/appointments',         [AppointmentController::class, 'store']);
+    Route::put('/appointments/{id}',     [AppointmentController::class, 'update']);
+    Route::delete('/appointments/{id}',  [AppointmentController::class, 'destroy']);
 });
 
 // ─── VETERINARIO (role 4) ─────────────────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:4'])->group(function () {
 
     // Expedientes médicos (creación y edición)
-    Route::post('/medical-records',        [MedicalRecordController::class, 'store']);
-    Route::put('/medical-records/{id}',    [MedicalRecordController::class, 'update']);
-
-    // Mascotas (lectura)
-    Route::get('/pets',     [PetController::class, 'index']);
-    Route::get('/pets/{id}',[PetController::class, 'show']);
+    Route::post('/medical-records',      [MedicalRecordController::class, 'store']);
+    Route::put('/medical-records/{id}',  [MedicalRecordController::class, 'update']);
 });
 
 // ─── CLIENTE (role 3) ─────────────────────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
 
     // Sus mascotas
-    Route::get('/mis-mascotas',            [PetController::class, 'index']);
-    Route::get('/mis-mascotas/{id}',       [PetController::class, 'show']);
-    Route::post('/mis-mascotas',           [PetController::class, 'store']);
-    Route::put('/mis-mascotas/{id}',       [PetController::class, 'update']);
-    Route::delete('/mis-mascotas/{id}', [PetController::class, 'destroy']);
+    Route::get('/mis-mascotas',           [PetController::class, 'index']);
+    Route::get('/mis-mascotas/{id}',      [PetController::class, 'show']);
+    Route::post('/mis-mascotas',          [PetController::class, 'store']);
+    Route::put('/mis-mascotas/{id}',      [PetController::class, 'update']);
+    Route::delete('/mis-mascotas/{id}',   [PetController::class, 'destroy']);
 
     // Sus citas
-    Route::post('/cliente/appointments',          [AppointmentController::class, 'store']);
+    Route::post('/cliente/appointments',  [AppointmentController::class, 'store']);
 
-      // Perfil
+    // Perfil
     Route::get('/perfil',    [PerfilController::class, 'show']);
     Route::post('/perfil',   [PerfilController::class, 'update']);
     Route::delete('/perfil', [PerfilController::class, 'destroy']);
 });
-
-
-

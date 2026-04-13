@@ -8,6 +8,27 @@ use Illuminate\Support\Facades\Storage;
 
 class PerfilController extends Controller
 {
+    public function index(Request $request)
+{
+    $user  = Auth::user();
+    $query = Pet::with('owner');
+
+    if ($user->role_id === 3) {
+        $query->where('owner_id', $user->id);
+    }
+
+    if (in_array($user->role_id, [1, 2]) && $request->filled('owner_id')) {
+        $query->where('owner_id', $request->owner_id);
+    }
+
+    return $this->success(
+        PetResource::collection($query->orderBy('name')->get())
+    );
+}
+
+
+
+
     public function show()
     {
         return response()->json([
