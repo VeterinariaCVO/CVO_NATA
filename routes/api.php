@@ -116,8 +116,8 @@ Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
 
 // ─── EMPLEADO / RECEPCIONISTA (role 2) ────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
-    Route::get('/admin/pets',          [PetController::class, 'index']);
-    Route::get('/admin/pets/{id}',     [PetController::class, 'show']);
+    Route::get('/recep/pets',          [PetController::class, 'index']);
+    Route::get('/recep/pets/{id}',     [PetController::class, 'show']);
     // Clientes
     Route::get('/empleado/clients',       [UserController::class, 'clients']);
     Route::get('/empleado/clients/{id}',  [UserController::class, 'showClient']);
