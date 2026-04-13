@@ -9,13 +9,14 @@ use Illuminate\Support\Facades\Auth;
 
 class RoleMiddleware
 {
-    public function handle(Request $request, Closure $next, $role)
-    {
-       $user = Auth::user();
-       if(!$user || $user->role_id != (int)$role){
-            abort(403, 'Acceso Denegado');
-        }
+    public function handle(Request $request, Closure $next, ...$roles)
+{
+    $user = auth()->user();
 
-        return $next($request);
+    if (!$user || !in_array($user->role_id, array_map('intval', $roles))) {
+        abort(403, 'Acceso Denegado');
     }
+
+    return $next($request);
+}
 }
