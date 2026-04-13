@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\WorkingDay;
 use App\Models\TimeSlot;
@@ -11,7 +10,6 @@ class TimeSlotSeeder extends Seeder
 {
     public function run(): void
     {
-        // Horarios base: 9:00 a 18:00 en bloques de 30 minutos
         $slots = [
             ['start' => '09:00', 'end' => '09:30'],
             ['start' => '09:30', 'end' => '10:00'],
@@ -29,19 +27,11 @@ class TimeSlotSeeder extends Seeder
             ['start' => '17:30', 'end' => '18:00'],
         ];
 
-        $workingDays = WorkingDay::where('is_open', true)->get();
-
-        foreach ($workingDays as $day) {
+        foreach (WorkingDay::where('is_open', true)->get() as $day) {
             foreach ($slots as $slot) {
                 TimeSlot::updateOrCreate(
-                    [
-                        'working_day_id' => $day->id,
-                        'start_time'     => $slot['start'],
-                    ],
-                    [
-                        'end_time' => $slot['end'],
-                        'status'   => 'available',
-                    ]
+                    ['working_day_id' => $day->id, 'start_time' => $slot['start']],
+                    ['end_time' => $slot['end'], 'status' => 'available', 'is_open' => true]
                 );
             }
         }
