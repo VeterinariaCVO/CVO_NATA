@@ -70,7 +70,7 @@ class PerfilController extends Controller
         'success' => true,
         'message' => 'Perfil actualizado correctamente.',
         'data'    => new \App\Http\Resources\UserResource($user)
-        ]);
+    ]);
     }
 
     public function destroy()
