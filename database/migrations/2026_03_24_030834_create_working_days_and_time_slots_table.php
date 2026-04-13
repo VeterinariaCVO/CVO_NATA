@@ -21,6 +21,7 @@ return new class extends Migration
             $table->time('start_time');
             $table->time('end_time');
             $table->enum('status', ['available', 'reserved'])->default('available');
+            $table->boolean('is_open')->default(true);
             $table->timestamps();
         });
     }

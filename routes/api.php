@@ -27,6 +27,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [ApiAuthController::class, 'logout']);
     Route::get('/me',      [ApiAuthController::class, 'me']);
+    Route::post('/me/update', [ApiAuthController::class, 'updateProfile']);
+    Route::put('/me/password', [ApiAuthController::class, 'updatePassword']);
 
     // Catálogo de servicios (solo activos, lectura)
     Route::get('/services', [ServiceController::class, 'index']);
@@ -79,18 +81,30 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::delete('/admin/services/{id}',  [ServiceController::class, 'destroy']);
 
     // Gestión de calendario
-    Route::post('/working-days',           [WorkingDayController::class, 'store']);
-    Route::put('/working-days/{id}',       [WorkingDayController::class, 'update']);
-    Route::delete('/working-days/{id}',    [WorkingDayController::class, 'destroy']);
-    Route::post('/time-slots',             [TimeSlotController::class, 'store']);
-    Route::put('/time-slots/{id}',         [TimeSlotController::class, 'update']);
-    Route::delete('/time-slots/{id}',      [TimeSlotController::class, 'destroy']);
+    // Working Days
+    Route::get('/admin/working-days', [WorkingDayController::class, 'index']);
+    Route::post('/admin/working-days/generate-month', [WorkingDayController::class, 'generateMonth']);
+    Route::get('/admin/working-days/{workingDay}', [WorkingDayController::class, 'show']);
+    Route::patch('/admin/working-days/{workingDay}/toggle-open', [WorkingDayController::class, 'toggleOpen']);
+    Route::delete('/admin/working-days/{workingDay}', [WorkingDayController::class, 'destroy']);
+
+    // Time Slots (anidados bajo working-days)
+    Route::get('/admin/working-days/{workingDay}/time-slots', [TimeSlotController::class, 'index']);
+    Route::get('/admin/time-slots/{timeSlot}', [TimeSlotController::class, 'show']);
+    Route::patch('/admin/time-slots/{timeSlot}/toggle-open', [TimeSlotController::class, 'toggleOpen']);
+    Route::patch('/admin/time-slots/{timeSlot}/status', [TimeSlotController::class, 'updateStatus']);
+    Route::patch('/admin/working-days/{workingDay}/time-slots/disable-all', [TimeSlotController::class, 'disableAllForDay']);
+    Route::patch('/admin/working-days/{workingDay}/time-slots/enable-all', [TimeSlotController::class, 'enableAllForDay']);
 
     // Walk-in
     Route::post('/walk-in',               [WalkInController::class, 'store']);
 
     // Mascotas (gestión completa)
-    Route::apiResource('/pets', PetController::class);
+    Route::get('/admin1/pets',          [PetController::class, 'index']);
+    Route::post('/admin/pets',         [PetController::class, 'store']);
+    Route::get('/admin1/pets/{id}',     [PetController::class, 'show']);
+    Route::put('/admin/pets/{id}',     [PetController::class, 'update']);
+    Route::delete('/admin/pets/{id}',  [PetController::class, 'destroy']);
 });
 
 //appointments empleado - admin
@@ -102,7 +116,8 @@ Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
 
 // ─── EMPLEADO / RECEPCIONISTA (role 2) ────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
-
+    Route::get('/admin/pets',          [PetController::class, 'index']);
+    Route::get('/admin/pets/{id}',     [PetController::class, 'show']);
     // Clientes
     Route::get('/empleado/clients',       [UserController::class, 'clients']);
     Route::get('/empleado/clients/{id}',  [UserController::class, 'showClient']);
@@ -112,6 +127,28 @@ Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
 
     // Mascotas
     Route::apiResource('/pets', PetController::class);
+
+    Route::get('/recep/appointments',        [AppointmentController::class, 'index']);
+    Route::get('/recep/appointments/{id}',   [AppointmentController::class, 'show']);
+    Route::post('/recep/appointments',          [AppointmentController::class, 'store']);
+    Route::put('/recep/appointments/{id}', [AppointmentController::class, 'update']);
+    Route::delete('/recep/appointments/{id}', [AppointmentController::class, 'destroy']);
+});
+
+// ─── CITAS: Cliente, Recepcionista y Admin (roles 1, 2, 3) ───────────────────
+Route::middleware(['auth:sanctum', 'role:1,2,3'])->group(function () {
+    Route::post('/appointments',        [AppointmentController::class, 'store']);
+    Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
+});
+
+// ─── CITAS: Solo Recepcionista y Admin (roles 1, 2) ──────────────────────────
+Route::middleware(['auth:sanctum', 'role:1,2'])->group(function () {
+    Route::put('/appointments/{id}',    [AppointmentController::class, 'update']);
+});
+
+// ─── WALK-IN: Admin (role 1) ─────────────────────────────────────────────────
+Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
+    Route::post('/walk-in',             [WalkInController::class, 'store']);
 });
 
 // ─── VETERINARIO (role 4) ─────────────────────────────────────────────────────
@@ -137,12 +174,16 @@ Route::middleware(['auth:sanctum', 'role:3'])->group(function () {
     Route::delete('/mis-mascotas/{id}', [PetController::class, 'destroy']);
 
     // Sus citas
+    Route::get('/client/appointments', [AppointmentController::class, 'index']);
+    Route::get('/client/appointments/{id}', [AppointmentController::class, 'show']);
+    Route::put('/cliente/appointments/{id}', [AppointmentController::class, 'update']);
     Route::post('/cliente/appointments',          [AppointmentController::class, 'store']);
 
       // Perfil
     Route::get('/perfil',    [PerfilController::class, 'show']);
     Route::post('/perfil',   [PerfilController::class, 'update']);
     Route::delete('/perfil', [PerfilController::class, 'destroy']);
+    Route::delete('/cliente/appointments/{id}', [AppointmentController::class, 'destroy']);
 });
 
 
