@@ -7,9 +7,10 @@ use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use App\Notifications\UserRegistered;
+use App\Notifications\NewClientRegistered;
+use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
@@ -21,26 +22,36 @@ class UserController extends Controller
     }
 
     public function store(UserRequest $request)
-    {
-        $data             = $request->validated();
-        $data['password'] = Hash::make($data['password']);
-        $data['active']   = $data['active'] ?? true;
+{
+    $user = Auth::user();
+    $data = $request->validated();
 
-        if ($request->hasFile('profile_photo')) {
-            $data['profile_photo'] = $request->file('profile_photo')
-                ->store('profile_photos', 'public');
-        }
-
-        $user = User::create($data);
-
-        $user->notify(new UserRegistered($user));
-
-        return $this->success(
-            new UserResource($user->load('role')),
-            'Usuario creado correctamente',
-            201
-        );
+    if ($user->role_id === 2) {
+        $data['role_id'] = 3;
     }
+
+    $data['password'] = Hash::make($data['password']);
+    $data['active']   = true;
+
+    $newUser = User::create($data);
+
+
+    $newUser->notify(new UserRegistered($newUser));
+
+    if ($newUser->role_id === 3) {
+        User::whereIn('role_id', [1, 2])
+            ->where('active', true)
+            ->where('id', '!=', $user->id)
+            ->get()
+            ->each(fn($u) => $u->notify(new NewClientRegistered($newUser)));
+    }
+
+    return $this->success(
+        new UserResource($newUser),
+        'Usuario creado correctamente',
+        201
+    );
+}
 
     public function show(string $id)
     {
