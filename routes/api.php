@@ -44,7 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}',     [NotificationController::class, 'destroy']);
     });
 
-    // Días laborales y horarios (consulta para cualquier rol)
+    // Días laborales y horarios (cualquier rol)
     Route::get('/working-days',        [WorkingDayController::class, 'index']);
     Route::get('/working-days/{id}',   [WorkingDayController::class, 'show']);
     Route::get('/time-slots',          [TimeSlotController::class, 'index']);
@@ -54,7 +54,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/medical-records',     [MedicalRecordController::class, 'index']);
     Route::get('/medical-records/{id}',[MedicalRecordController::class, 'show']);
 
-    // Citas (lectura para todos, escritura controlada por rol)
+    // Citas
     Route::get('/appointments',        [AppointmentController::class, 'index']);
     Route::get('/appointments/{id}',   [AppointmentController::class, 'show']);
 });
@@ -73,14 +73,14 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::get('/admin/employees',         [UserController::class, 'employees']);
     Route::get('/admin/employees/{id}',    [UserController::class, 'showEmployee']);
 
-    // Catálogo de servicios (gestión completa)
+    // Catalogo de servicios (gestion completa)
     Route::get('/admin/services',          [ServiceController::class, 'indexAdmin']);
     Route::post('/admin/services',         [ServiceController::class, 'store']);
     Route::get('/admin/services/{id}',     [ServiceController::class, 'show']);
     Route::put('/admin/services/{id}',     [ServiceController::class, 'update']);
     Route::delete('/admin/services/{id}',  [ServiceController::class, 'destroy']);
 
-    // Gestión de calendario
+    // Gestion de calendario
     // Working Days
     Route::get('/admin/working-days', [WorkingDayController::class, 'index']);
     Route::post('/admin/working-days/generate-month', [WorkingDayController::class, 'generateMonth']);
@@ -88,7 +88,7 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::patch('/admin/working-days/{workingDay}/toggle-open', [WorkingDayController::class, 'toggleOpen']);
     Route::delete('/admin/working-days/{workingDay}', [WorkingDayController::class, 'destroy']);
 
-    // Time Slots (anidados bajo working-days)
+    // Time Slots
     Route::get('/admin/working-days/{workingDay}/time-slots', [TimeSlotController::class, 'index']);
     Route::get('/admin/time-slots/{timeSlot}', [TimeSlotController::class, 'show']);
     Route::patch('/admin/time-slots/{timeSlot}/toggle-open', [TimeSlotController::class, 'toggleOpen']);
@@ -99,7 +99,7 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     // Walk-in
     Route::post('/walk-in',               [WalkInController::class, 'store']);
 
-    // Mascotas (gestión completa)
+    // Mascotas (gestion completa)
     Route::get('/admin1/pets',          [PetController::class, 'index']);
     Route::post('/admin/pets',         [PetController::class, 'store']);
     Route::get('/admin1/pets/{id}',     [PetController::class, 'show']);
