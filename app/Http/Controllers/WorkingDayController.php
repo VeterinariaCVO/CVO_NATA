@@ -2,149 +2,104 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\WorkingDay;
-use App\Models\TimeSlot;
+use App\Http\Traits\ApiResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class WorkingDayController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    use ApiResponse;
+
+    // ─── INDEX ────────────────────────────────────────────────────────────────
+    public function index()
     {
-        $query = WorkingDay::with('timeSlots');
-
-        if ($request->has('month') && $request->has('year')) {
-            $query->whereMonth('date', $request->month)
-                ->whereYear('date', $request->year);
-        }
-
-        $workingDays = $query->orderBy('date')->get();
-
-        return response()->json($workingDays);
+        $dias = DB::select('SELECT * FROM working_days ORDER BY date ASC');
+        return $this->success($dias);
     }
 
-    public function generateMonth(Request $request): JsonResponse
+    // ─── SHOW (con sus slots) ─────────────────────────────────────────────────
+    public function show($id)
+    {
+        $dia = DB::select('SELECT * FROM working_days WHERE id = ?', [$id]);
+
+        if (empty($dia)) {
+            return $this->error('Día no encontrado', 404);
+        }
+
+        $slots = DB::select(
+            'SELECT * FROM time_slots WHERE working_day_id = ? ORDER BY start_time ASC',
+            [$id]
+        );
+
+        $resultado        = $dia[0];
+        $resultado->slots = $slots;
+
+        return $this->success($resultado);
+    }
+
+    // ─── STORE ────────────────────────────────────────────────────────────────
+    public function store(Request $request)
     {
         $request->validate([
-            'year'  => 'required|integer|min:2024',
-            'month' => 'required|integer|min:1|max:12',
+            'date'    => 'required|date|unique:working_days,date',
+            'is_open' => 'boolean',
         ]);
 
-        $year  = $request->year;
-        $month = $request->month;
-
-        $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
-        $endDate   = $startDate->copy()->endOfMonth();
-
-        $created = [];
-        $skipped = [];
-
-        $current = $startDate->copy();
-
-        while ($current->lte($endDate)) {
-            $dateStr = $current->toDateString();
-
-            $isOpen = !in_array($current->dayOfWeek, [Carbon::SATURDAY, Carbon::SUNDAY]);
-
-            $workingDay = WorkingDay::firstOrCreate(
-                ['date' => $dateStr],
-                ['is_open' => $isOpen]
-            );
-
-            if ($workingDay->wasRecentlyCreated) {
-                $this->generateTimeSlotsForDay($workingDay);
-                $created[] = $dateStr;
-            } else {
-                $skipped[] = $dateStr;
-            }
-
-            $current->addDay();
-        }
-
-        return response()->json([
-            'message' => "Mes {$month}/{$year} generado correctamente.",
-            'created' => $created,
-            'skipped' => $skipped,
-        ], 201);
-    }
-
-    public function show(WorkingDay $workingDay): JsonResponse
-    {
-        $workingDay->load('timeSlots');
-
-        return response()->json($workingDay);
-    }
-
-    public function toggleOpen(WorkingDay $workingDay): JsonResponse
-    {
-        $newState = !$workingDay->is_open;
-
-        $workingDay->update(['is_open' => $newState]);
-
-        $workingDay->timeSlots()
-            ->where('status', 'available')
-            ->update(['is_open' => $newState]);
-
-        if (!$newState) {
-            $workingDay->timeSlots()
-                ->where('status', 'reserved')
-                ->with('appointment.pet.owner')
-                ->get()
-                ->each(function ($slot) {
-                    $appointment = $slot->appointment;
-
-                    if ($appointment) {
-                        $appointment->update(['status' => 'cancelled']);
-                        $slot->update(['status' => 'available', 'is_open' => false]);
-
-                        $owner = $appointment->pet?->owner;
-                        if ($owner) {
-                            $owner->notify(new \App\Notifications\AppointmentCancelled($appointment));
-                        }
-                    }
-                });
-        }
-
-        return response()->json([
-            'message' => 'Estado del día actualizado.',
-            'date'    => $workingDay->date,
-            'is_open' => $workingDay->is_open,
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'crear',
+            null,
+            $request->date,
+            $request->is_open ?? 1,
         ]);
+
+        return $this->success($resultado[0], 'Día de trabajo creado correctamente', 201);
     }
 
-    public function destroy(WorkingDay $workingDay): JsonResponse
+    // ─── UPDATE ───────────────────────────────────────────────────────────────
+    public function update(Request $request, $id)
     {
-        $workingDay->delete();
+        $request->validate([
+            'date'    => 'nullable|date',
+            'is_open' => 'nullable|boolean',
+        ]);
 
-        return response()->json(['message' => 'Día laboral eliminado.']);
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'editar',
+            $id,
+            $request->date,
+            $request->is_open,
+        ]);
+
+        return $this->success($resultado[0], 'Día actualizado correctamente');
     }
 
-    private function generateTimeSlotsForDay(WorkingDay $workingDay): void
+    // ─── CERRAR ───────────────────────────────────────────────────────────────
+    public function cerrar($id)
     {
-        $start = Carbon::createFromTimeString('09:00');
-        $end   = Carbon::createFromTimeString('18:00');
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'cerrar', $id, null, null,
+        ]);
 
-        $slots = [];
-        $now   = now();
-        $current = $start->copy();
+        return $this->success($resultado[0], 'Día cerrado correctamente');
+    }
 
-        while ($current->lt($end)) {
-            $slotEnd = $current->copy()->addMinutes(30);
+    // ─── ABRIR ────────────────────────────────────────────────────────────────
+    public function abrir($id)
+    {
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'abrir', $id, null, null,
+        ]);
 
-            $slots[] = [
-                'working_day_id' => $workingDay->id,
-                'start_time'     => $current->format('H:i:s'),
-                'end_time'       => $slotEnd->format('H:i:s'),
-                'status'         => 'available',
-                'is_open'        => $workingDay->is_open,
-                'created_at'     => $now,
-                'updated_at'     => $now,
-            ];
+        return $this->success($resultado[0], 'Día abierto correctamente');
+    }
 
-            $current->addMinutes(30);
-        }
+    // ─── DESTROY ──────────────────────────────────────────────────────────────
+    public function destroy($id)
+    {
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'eliminar', $id, null, null,
+        ]);
 
-        TimeSlot::insert($slots);
+        return $this->success($resultado[0], 'Día de trabajo eliminado correctamente');
     }
 }
