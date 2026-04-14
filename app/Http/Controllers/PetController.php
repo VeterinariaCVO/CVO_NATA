@@ -2,106 +2,215 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\PetRequest;
-use App\Http\Resources\PetResource;
 use App\Http\Traits\ApiResponse;
-use App\Models\Pet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class PetController extends Controller
 {
     use ApiResponse;
 
+    // ─── INDEX ────────────────────────────────────────────────────────────────
+    // Todos los roles usan vw_pets, pero con filtros distintos
     public function index(Request $request)
     {
-        $user  = Auth::user();
-        $query = Pet::with('owner');
+        $user   = Auth::user();
+        $where  = [];
+        $params = [];
 
+        // CLIENTE → solo ve sus propias mascotas activas
         if ($user->isCliente()) {
-            $query->where('owner_id', $user->id);
+            $where[]  = 'dueno_id = ?';
+            $params[] = $user->id;
+            $where[]  = 'activa = 1';
+        }
+
+        // Filtros opcionales (Admin/Empleado)
+        if ($request->filled('owner_id')) {
+            $where[]  = 'dueno_id = ?';
+            $params[] = $request->owner_id;
         }
 
         if ($request->filled('search')) {
-            $query->where('name', 'LIKE', '%' . $request->search . '%');
+            $where[]  = 'nombre LIKE ?';
+            $params[] = '%' . $request->search . '%';
         }
 
-        if ($request->filled('owner_id')) {
-            $query->where('owner_id', $request->owner_id);
+        // Construimos el SQL final
+        $sql = 'SELECT * FROM vw_pets';
+        if (!empty($where)) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
         }
+        $sql .= ' ORDER BY nombre ASC';
 
-        return $this->success(PetResource::collection($query->orderBy('name')->get()));
+        $mascotas = DB::select($sql, $params);
+        return $this->success($mascotas);
     }
 
-
-
+    // ─── SHOW ─────────────────────────────────────────────────────────────────
     public function show($id)
     {
-        $pet = Pet::with('owner')->findOrFail($id);
-        return $this->success(new PetResource($pet));
+        $mascota = DB::select('SELECT * FROM vw_pets WHERE mascota_id = ?', [$id]);
+
+        if (empty($mascota)) {
+            return $this->error('Mascota no encontrada', 404);
+        }
+
+        return $this->success($mascota[0]);
     }
 
-    public function store(PetRequest $request)
+    // ─── STORE ────────────────────────────────────────────────────────────────
+    // Admin/Empleado → sp_registrar_mascota (sin límite)
+    // Cliente        → sp_registrar_mascota_cliente (límite 8 mascotas)
+    public function store(Request $request)
     {
-        $data = $request->validated();
+        $user = Auth::user();
 
-        // Si es cliente, el owner_id siempre es él mismo
-        if (Auth::user()->isCliente()) {
-            $data['owner_id'] = Auth::id();
-        }
+        $request->validate([
+            'name'          => 'required|string|max:255',
+            'species'       => 'required|string|max:100',
+            'breed'         => 'nullable|string|max:100',
+            'color'         => 'nullable|string|max:100',
+            'special_marks' => 'nullable|string|max:255',
+            'weight'        => 'nullable|numeric|min:0',
+            'sex'           => 'nullable|in:male,female',
+            'age'           => 'nullable|integer|min:0',
+            'photo'         => 'nullable|image|max:2048',
+            'owner_id'      => 'nullable|integer|exists:users,id',
+        ]);
 
+        // Guardar foto si viene (la ruta se pasa al SP)
+        $photoPath = null;
         if ($request->hasFile('photo')) {
-            $data['photo_path'] = $request->file('photo')->store('pets', 'public');
+            $photoPath = $request->file('photo')->store('pets', 'public');
         }
 
-        $pet = Pet::create($data);
-
-        return $this->success(
-            new PetResource($pet->load('owner')),
-            'Mascota registrada exitosamente',
-            201
-        );
-        if (Auth::user()->isCliente()) {
-        $total = Pet::where('owner_id', Auth::id())->count();
-        if ($total >= 8) {
-        return $this->error('Has alcanzado el límite de 8 mascotas.', 422);
-             }
+        if ($user->isCliente()) {
+            // El SP valida que no tenga más de 8 mascotas activas
+            $resultado = DB::select('CALL sp_registrar_mascota_cliente(?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                $request->name,
+                $request->species,
+                $request->breed,
+                $request->color,
+                $request->special_marks,
+                $request->weight,
+                $request->sex,
+                $request->age,
+                $user->id,              // owner_id siempre es el cliente logueado
+            ]);
+        } else {
+            // Admin o Empleado pueden asignar cualquier owner_id
+            $resultado = DB::select('CALL sp_registrar_mascota(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                $request->name,
+                $request->species,
+                $request->breed,
+                $request->color,
+                $request->special_marks,
+                $request->weight,
+                $request->sex,
+                $request->age,
+                $photoPath,
+                $request->owner_id,
+            ]);
         }
+
+        return $this->success($resultado[0], 'Mascota registrada exitosamente', 201);
     }
 
-
-
-    public function update(PetRequest $request, $id)
+    // ─── UPDATE ───────────────────────────────────────────────────────────────
+    // Admin/Empleado → sp_gestionar_mascota('editar')
+    // Cliente        → sp_editar_mascota() (valida que sea su mascota)
+    public function update(Request $request, $id)
     {
-        $pet  = Pet::findOrFail($id);
-        $data = $request->validated();
+        $user = Auth::user();
 
+        $request->validate([
+            'name'          => 'nullable|string|max:255',
+            'species'       => 'nullable|string|max:100',
+            'breed'         => 'nullable|string|max:100',
+            'color'         => 'nullable|string|max:100',
+            'special_marks' => 'nullable|string|max:255',
+            'weight'        => 'nullable|numeric|min:0',
+            'sex'           => 'nullable|in:male,female',
+            'age'           => 'nullable|integer|min:0',
+            'photo'         => 'nullable|image|max:2048',
+        ]);
+
+        // Actualizar foto si viene nueva
+        $photoPath = null;
         if ($request->hasFile('photo')) {
-            if ($pet->photo_path) {
-                Storage::disk('public')->delete($pet->photo_path);
-            }
-            $data['photo_path'] = $request->file('photo')->store('pets', 'public');
+            $photoPath = $request->file('photo')->store('pets', 'public');
         }
 
-        $pet->update($data);
+        if ($user->isCliente()) {
+            // sp_editar_mascota valida que la mascota le pertenece al cliente
+            $resultado = DB::select('CALL sp_editar_mascota(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                $id,
+                $request->name,
+                $request->species,
+                $request->breed,
+                $request->color,
+                $request->special_marks,
+                $request->weight,
+                $request->sex,
+                $request->age,
+                $user->id,           // p_cliente_id para validar ownership
+            ]);
+        } else {
+            // Admin o Empleado pueden editar cualquier mascota
+            $resultado = DB::select('CALL sp_gestionar_mascota(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                'editar',
+                $id,
+                $request->name,
+                $request->species,
+                $request->breed,
+                $request->color,
+                $request->special_marks,
+                $request->weight,
+                $request->sex,
+                $request->age,
+                $photoPath,
+                null,               // active (no cambia en editar normal)
+            ]);
+        }
 
-        return $this->success(
-            new PetResource($pet->load('owner')),
-            'Mascota actualizada exitosamente'
-        );
+        return $this->success($resultado[0], 'Mascota actualizada exitosamente');
     }
 
+    // ─── ACTIVAR / DESACTIVAR (solo Admin) ───────────────────────────────────
+    public function toggleActive(Request $request, $id)
+    {
+        $request->validate([
+            'accion' => 'required|in:activar,desactivar',
+        ]);
+
+        $resultado = DB::select('CALL sp_gestionar_mascota(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            $request->accion,
+            $id,
+            null, null, null, null, null, null, null, null, null, null,
+        ]);
+
+        return $this->success($resultado[0]);
+    }
+
+    // ─── DESTROY (solo Admin) ─────────────────────────────────────────────────
     public function destroy($id)
     {
-        $pet = Pet::findOrFail($id);
+        // Recuperar la foto antes de eliminar para borrarla del storage
+        $mascota = DB::select('SELECT foto FROM vw_pets WHERE mascota_id = ?', [$id]);
 
-        if ($pet->photo_path) {
-            Storage::disk('public')->delete($pet->photo_path);
+        if (!empty($mascota) && $mascota[0]->foto) {
+            Storage::disk('public')->delete($mascota[0]->foto);
         }
 
-        $pet->delete();
+        $resultado = DB::select('CALL sp_gestionar_mascota(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            'eliminar',
+            $id,
+            null, null, null, null, null, null, null, null, null, null,
+        ]);
 
-        return $this->success(null, 'Mascota eliminada exitosamente');
+        return $this->success($resultado[0], 'Mascota eliminada exitosamente');
     }
 }

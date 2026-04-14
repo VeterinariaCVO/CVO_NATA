@@ -2,100 +2,253 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\TimeSlot;
-use App\Models\WorkingDay;
+use App\Http\Traits\ApiResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
+// ================================================================
+// TimeSlotController — Gestión de bloques de horario
+// Usa sp_gestionar_horarios (Admin)
+// ================================================================
 class TimeSlotController extends Controller
 {
-    public function index(WorkingDay $workingDay): JsonResponse
-    {
-        $slots = $workingDay->timeSlots()->orderBy('start_time')->get();
+    use ApiResponse;
 
-        return response()->json($slots);
+    // ─── INDEX ────────────────────────────────────────────────────────────────
+    // Devuelve los slots de un día de trabajo específico
+    public function index($workingDayId)
+    {
+        $slots = DB::select(
+            'SELECT * FROM time_slots WHERE working_day_id = ? ORDER BY start_time ASC',
+            [$workingDayId]
+        );
+        return $this->success($slots);
     }
 
-    public function show(TimeSlot $timeSlot): JsonResponse
+    // ─── SHOW ─────────────────────────────────────────────────────────────────
+    public function show($id)
     {
-        return response()->json($timeSlot);
+        $slot = DB::select('SELECT * FROM time_slots WHERE id = ?', [$id]);
+
+        if (empty($slot)) {
+            return $this->error('Slot no encontrado', 404);
+        }
+
+        return $this->success($slot[0]);
     }
 
-    public function toggleOpen(TimeSlot $timeSlot): JsonResponse
-    {
-        if ($timeSlot->status === 'reserved' && !$timeSlot->is_open) {
-            return response()->json([
-                'message' => 'No se puede habilitar un slot reservado.',
-            ], 422);
-        }
-
-        $newState = !$timeSlot->is_open;
-        $timeSlot->update(['is_open' => $newState]);
-
-        if (!$newState && $timeSlot->status === 'reserved') {
-            $appointment = $timeSlot->appointment;
-            if ($appointment) {
-                $appointment->update(['status' => 'cancelled']);
-                $timeSlot->update(['status' => 'available']);
-
-                $owner = $appointment->pet?->owner;
-                if ($owner) {
-                    $owner->notify(new \App\Notifications\AppointmentCancelled($appointment));
-                }
-            }
-        }
-
-        if ($newState) {
-            $timeSlot->workingDay->update(['is_open' => true]);
-        }
-
-        return response()->json([
-            'message'    => 'Estado del slot actualizado.',
-            'start_time' => $timeSlot->start_time,
-            'end_time'   => $timeSlot->end_time,
-            'is_open'    => $timeSlot->is_open,
-        ]);
-    }
-
-    public function updateStatus(Request $request, TimeSlot $timeSlot): JsonResponse
+    // ─── STORE ────────────────────────────────────────────────────────────────
+    // El SP valida que el día exista y que start_time < end_time
+    public function store(Request $request)
     {
         $request->validate([
-            'status' => 'required|in:available,reserved',
+            'working_day_id' => 'required|integer|exists:working_days,id',
+            'start_time'     => 'required|date_format:H:i',
+            'end_time'       => 'required|date_format:H:i|after:start_time',
         ]);
 
-        if (!$timeSlot->is_open) {
-            return response()->json([
-                'message' => 'No se puede modificar un slot deshabilitado.',
-            ], 422);
+        $resultado = DB::select('CALL sp_gestionar_horarios(?, ?, ?, ?, ?, ?, ?)', [
+            'crear',
+            null,                        // p_slot_id (no aplica en crear)
+            $request->working_day_id,
+            $request->start_time,
+            $request->end_time,
+            'available',                 // status por defecto
+            1,                           // is_open por defecto
+        ]);
+
+        return $this->success($resultado[0], 'Slot creado correctamente', 201);
+    }
+
+    // ─── UPDATE ───────────────────────────────────────────────────────────────
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'start_time' => 'nullable|date_format:H:i',
+            'end_time'   => 'nullable|date_format:H:i',
+            'status'     => 'nullable|in:available,reserved',
+            'is_open'    => 'nullable|boolean',
+        ]);
+
+        $resultado = DB::select('CALL sp_gestionar_horarios(?, ?, ?, ?, ?, ?, ?)', [
+            'editar',
+            $id,
+            null,                        // working_day_id (no cambia en editar)
+            $request->start_time,
+            $request->end_time,
+            $request->status,
+            $request->is_open,
+        ]);
+
+        return $this->success($resultado[0], 'Slot actualizado correctamente');
+    }
+
+    // ─── CERRAR SLOT ──────────────────────────────────────────────────────────
+    // Deshabilita un slot individual (is_open = 0)
+    public function cerrar($id)
+    {
+        $resultado = DB::select('CALL sp_gestionar_horarios(?, ?, ?, ?, ?, ?, ?)', [
+            'cerrar',
+            $id,
+            null, null, null, null, null,
+        ]);
+
+        return $this->success($resultado[0], 'Slot cerrado correctamente');
+    }
+
+    // ─── DESTROY ──────────────────────────────────────────────────────────────
+    // El SP no permite eliminar slots reservados
+    public function destroy($id)
+    {
+        $resultado = DB::select('CALL sp_gestionar_horarios(?, ?, ?, ?, ?, ?, ?)', [
+            'eliminar',
+            $id,
+            null, null, null, null, null,
+        ]);
+
+        return $this->success($resultado[0], 'Slot eliminado correctamente');
+    }
+
+    // ─── DESHABILITAR TODOS LOS SLOTS DE UN DÍA ──────────────────────────────
+    public function disableAllForDay($workingDayId)
+    {
+        DB::statement(
+            'UPDATE time_slots SET is_open = 0, updated_at = NOW()
+             WHERE working_day_id = ? AND status = "available"',
+            [$workingDayId]
+        );
+
+        return $this->success(null, 'Todos los slots disponibles fueron deshabilitados');
+    }
+
+    // ─── HABILITAR TODOS LOS SLOTS DE UN DÍA ─────────────────────────────────
+    public function enableAllForDay($workingDayId)
+    {
+        DB::statement(
+            'UPDATE time_slots SET is_open = 1, updated_at = NOW()
+             WHERE working_day_id = ? AND status = "available"',
+            [$workingDayId]
+        );
+
+        return $this->success(null, 'Todos los slots disponibles fueron habilitados');
+    }
+}
+
+
+// ================================================================
+// WorkingDayController — Gestión de días de trabajo
+// Usa sp_gestionar_dias_trabajo (Admin)
+// ================================================================
+class WorkingDayController extends Controller
+{
+    use ApiResponse;
+
+    // ─── INDEX ────────────────────────────────────────────────────────────────
+    public function index()
+    {
+        $dias = DB::select(
+            'SELECT * FROM working_days ORDER BY date ASC'
+        );
+        return $this->success($dias);
+    }
+
+    // ─── SHOW (con sus slots) ─────────────────────────────────────────────────
+    public function show($id)
+    {
+        $dia = DB::select('SELECT * FROM working_days WHERE id = ?', [$id]);
+
+        if (empty($dia)) {
+            return $this->error('Día no encontrado', 404);
         }
 
-        $timeSlot->update(['status' => $request->status]);
+        // También cargamos los slots de ese día
+        $slots = DB::select(
+            'SELECT * FROM time_slots WHERE working_day_id = ? ORDER BY start_time ASC',
+            [$id]
+        );
 
-        return response()->json([
-            'message' => 'Status del slot actualizado.',
-            'slot'    => $timeSlot,
-        ]);
+        $resultado        = $dia[0];
+        $resultado->slots = $slots;
+
+        return $this->success($resultado);
     }
 
-    public function disableAllForDay(WorkingDay $workingDay): JsonResponse
+    // ─── STORE ────────────────────────────────────────────────────────────────
+    // El SP valida que no exista ya un registro con esa fecha
+    public function store(Request $request)
     {
-        $workingDay->timeSlots()
-            ->where('status', 'available')
-            ->update(['is_open' => false]);
-
-        return response()->json([
-            'message' => "Todos los slots disponibles del día {$workingDay->date} fueron deshabilitados.",
+        $request->validate([
+            'date'    => 'required|date|unique:working_days,date',
+            'is_open' => 'boolean',
         ]);
+
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'crear',
+            null,                    // p_day_id (no aplica en crear)
+            $request->date,
+            $request->is_open ?? 1,
+        ]);
+
+        return $this->success($resultado[0], 'Día de trabajo creado correctamente', 201);
     }
 
-    public function enableAllForDay(WorkingDay $workingDay): JsonResponse
+    // ─── CERRAR DÍA ───────────────────────────────────────────────────────────
+    // Pone is_open = 0 en el día Y en todos sus slots disponibles
+    public function cerrar($id)
     {
-        $workingDay->timeSlots()
-            ->where('status', 'available')
-            ->update(['is_open' => true]);
-
-        return response()->json([
-            'message' => "Todos los slots disponibles del día {$workingDay->date} fueron habilitados.",
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'cerrar',
+            $id,
+            null,
+            null,
         ]);
+
+        return $this->success($resultado[0], 'Día cerrado correctamente');
+    }
+
+    // ─── ABRIR DÍA ────────────────────────────────────────────────────────────
+    public function abrir($id)
+    {
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'abrir',
+            $id,
+            null,
+            null,
+        ]);
+
+        return $this->success($resultado[0], 'Día abierto correctamente');
+    }
+
+    // ─── UPDATE ───────────────────────────────────────────────────────────────
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'date'    => 'nullable|date',
+            'is_open' => 'nullable|boolean',
+        ]);
+
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'editar',
+            $id,
+            $request->date,
+            $request->is_open,
+        ]);
+
+        return $this->success($resultado[0], 'Día actualizado correctamente');
+    }
+
+    // ─── DESTROY ──────────────────────────────────────────────────────────────
+    // El SP elimina también todos los slots del día
+    // Lanza error si hay citas activas ese día
+    public function destroy($id)
+    {
+        $resultado = DB::select('CALL sp_gestionar_dias_trabajo(?, ?, ?, ?)', [
+            'eliminar',
+            $id,
+            null,
+            null,
+        ]);
+
+        return $this->success($resultado[0], 'Día de trabajo eliminado correctamente');
     }
 }

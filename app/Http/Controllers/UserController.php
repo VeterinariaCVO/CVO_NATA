@@ -2,134 +2,172 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\UserRequest;
-use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
-use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-use App\Notifications\UserRegistered;
 
 class UserController extends Controller
 {
     use ApiResponse;
+
+    // ─── INDEX ────────────────────────────────────────────────────────────────
+    // Admin ve todos los usuarios con su rol
     public function index()
     {
-        $users = User::with('role')->orderBy('name')->get();
-        return $this->success(UserResource::collection($users));
+        $users = DB::select('SELECT u.*, r.name AS rol_nombre
+                             FROM users u
+                             JOIN roles r ON r.id = u.role_id
+                             ORDER BY u.name');
+
+        return $this->success($users);
     }
 
-    public function store(UserRequest $request)
+    // ─── SHOW ─────────────────────────────────────────────────────────────────
+    public function show($id)
     {
-        $data             = $request->validated();
-        $data['password'] = Hash::make($data['password']);
-        $data['active']   = $data['active'] ?? true;
+        $user = DB::select('SELECT u.*, r.name AS rol_nombre
+                            FROM users u
+                            JOIN roles r ON r.id = u.role_id
+                            WHERE u.id = ?', [$id]);
 
-        if ($request->hasFile('profile_photo')) {
-            $data['profile_photo'] = $request->file('profile_photo')
-                ->store('profile_photos', 'public');
+        if (empty($user)) {
+            return $this->error('Usuario no encontrado', 404);
         }
 
-        $user = User::create($data);
-
-        $user->notify(new UserRegistered($user));
-
-        return $this->success(
-            new UserResource($user->load('role')),
-            'Usuario creado correctamente',
-            201
-        );
+        return $this->success($user[0]);
     }
 
-    public function show(string $id)
+    // ─── STORE ────────────────────────────────────────────────────────────────
+    // Admin crea cualquier usuario usando sp_crear_usuario
+    public function store(Request $request)
     {
-        $user = User::with('role')->findOrFail($id);
-        return $this->success(new UserResource($user));
+        $request->validate([
+            'name'       => 'required|string|max:255',
+            'email'      => 'required|email|unique:users,email',
+            'password'   => 'required|string|min:6',
+            'role_id'    => 'required|integer|exists:roles,id',
+            'phone'      => 'nullable|string|max:20',
+            'address'    => 'nullable|string|max:255',
+            'gender'     => 'nullable|in:masculino,femenino,otro',
+            'birth_date' => 'nullable|date',
+        ]);
+
+        // Hasheamos el password antes de enviarlo al SP
+        $passwordHash = Hash::make($request->password);
+
+        // sp_crear_usuario valida que el email no esté duplicado y que el rol exista
+        $resultado = DB::select('CALL sp_crear_usuario(?, ?, ?, ?, ?, ?, ?, ?)', [
+            $request->name,
+            $request->email,
+            $passwordHash,
+            $request->role_id,
+            $request->phone,
+            $request->address,
+            $request->gender,
+            $request->birth_date,
+        ]);
+
+        return $this->success($resultado[0], 'Usuario creado correctamente', 201);
     }
 
-    public function update(UserRequest $request, string $id)
+    // ─── UPDATE ───────────────────────────────────────────────────────────────
+    // Admin edita/activa/desactiva/elimina usando sp_gestionar_usuario
+    public function update(Request $request, $id)
     {
-        $user = User::findOrFail($id);
-        $data = $request->validated();
+        $request->validate([
+            'accion'     => 'required|in:editar,activar,desactivar',
+            'name'       => 'nullable|string|max:255',
+            'email'      => 'nullable|email',
+            'role_id'    => 'nullable|integer|exists:roles,id',
+            'phone'      => 'nullable|string|max:20',
+            'address'    => 'nullable|string|max:255',
+            'gender'     => 'nullable|in:masculino,femenino,otro',
+            'birth_date' => 'nullable|date',
+            'active'     => 'nullable|boolean',
+        ]);
 
-        if (!empty($data['password'])) {
-            $data['password'] = Hash::make($data['password']);
-        } else {
-            unset($data['password']);
-        }
+        // sp_gestionar_usuario usa COALESCE: si mandas NULL en un campo, no lo cambia
+        $resultado = DB::select('CALL sp_gestionar_usuario(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            $request->accion,
+            $id,
+            $request->name,
+            $request->email,
+            $request->role_id,
+            $request->phone,
+            $request->address,
+            $request->gender,
+            $request->birth_date,
+            $request->active,
+        ]);
 
-        if ($request->hasFile('profile_photo')) {
-            if ($user->profile_photo) {
-                Storage::disk('public')->delete($user->profile_photo);
-            }
-            $data['profile_photo'] = $request->file('profile_photo')
-                ->store('profile_photos', 'public');
-        }
-
-        if ($request->input('remove_photo') === '1') {
-            if ($user->profile_photo) {
-                Storage::disk('public')->delete($user->profile_photo);
-            }
-            $data['profile_photo'] = null;
-        }
-
-        $user->update($data);
-
-        return $this->success(
-            new UserResource($user->load('role')),
-            'Usuario actualizado correctamente'
-        );
+        return $this->success($resultado[0], 'Usuario actualizado correctamente');
     }
 
-    public function destroy(string $id)
+    // ─── DESTROY ──────────────────────────────────────────────────────────────
+    public function destroy($id)
     {
-        $user = User::findOrFail($id);
+        $resultado = DB::select('CALL sp_gestionar_usuario(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            'eliminar',
+            $id,
+            null, null, null, null, null, null, null, null,
+        ]);
 
-        if ($user->profile_photo) {
-            Storage::disk('public')->delete($user->profile_photo);
-        }
-
-        $user->delete();
-
-        return $this->success(null, 'Usuario eliminado correctamente');
+        return $this->success($resultado[0], 'Usuario eliminado correctamente');
     }
 
-    public function employees()
-    {
-        $employees = User::with('role')
-            ->whereIn('role_id', [2, 4])
-            ->orderBy('name')
-            ->get();
-        return $this->success(UserResource::collection($employees));
-    }
-
-    public function showEmployee(string $id)
-    {
-        $employee = User::with('role')
-            ->whereIn('role_id', [2, 4])
-            ->findOrFail($id);
-        return $this->success(new UserResource($employee));
-    }
-
+    // ─── CLIENTES ─────────────────────────────────────────────────────────────
+    // Lista solo usuarios con role_id = 3
     public function clients()
     {
-        $clients = User::with('role')
-            ->where('role_id', 3)
-            ->orderBy('name')
-            ->get();
-        return $this->success(UserResource::collection($clients));
+        $clients = DB::select('SELECT u.*, r.name AS rol_nombre
+                               FROM users u
+                               JOIN roles r ON r.id = u.role_id
+                               WHERE u.role_id = 3
+                               ORDER BY u.name');
+
+        return $this->success($clients);
     }
 
-    public function showClient(string $id)
+    public function showClient($id)
     {
-        $client = User::with(['role', 'pets'])
-            ->where('role_id', 3)
-            ->findOrFail($id);
+        $client = DB::select('SELECT u.*, r.name AS rol_nombre
+                              FROM users u
+                              JOIN roles r ON r.id = u.role_id
+                              WHERE u.id = ? AND u.role_id = 3', [$id]);
 
-        return $this->success([
-            'client' => new UserResource($client),
-            'pets'   => $client->pets,
-        ]);
+        if (empty($client)) {
+            return $this->error('Cliente no encontrado', 404);
+        }
+
+        return $this->success($client[0]);
+    }
+
+    // ─── EMPLEADOS ────────────────────────────────────────────────────────────
+    // Lista empleados (role_id 2) y veterinarios (role_id 4)
+    public function employees()
+    {
+        $employees = DB::select('SELECT u.*, r.name AS rol_nombre
+                                 FROM users u
+                                 JOIN roles r ON r.id = u.role_id
+                                 WHERE u.role_id IN (2, 4)
+                                 ORDER BY u.name');
+
+        return $this->success($employees);
+    }
+
+    public function showEmployee($id)
+    {
+        $employee = DB::select('SELECT u.*, r.name AS rol_nombre
+                                FROM users u
+                                JOIN roles r ON r.id = u.role_id
+                                WHERE u.id = ? AND u.role_id IN (2, 4)', [$id]);
+
+        if (empty($employee)) {
+            return $this->error('Empleado no encontrado', 404);
+        }
+
+        return $this->success($employee[0]);
     }
 }

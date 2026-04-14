@@ -2,249 +2,210 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\AppointmentRequest;
-use App\Http\Requests\UpdateAppointmentRequest;
-use App\Http\Resources\AppointmentResource;
 use App\Http\Traits\ApiResponse;
-use App\Models\Appointment;
-use App\Models\TimeSlot;
-use App\Notifications\AppointmentCancelled;
-use App\Notifications\AppointmentCancelledAlert;
-use App\Notifications\AppointmentConfirmedVet;
-use App\Notifications\AppointmentCreated;
-use App\Notifications\AppointmentPendingAlert;
-use App\Notifications\AppointmentRescheduled;
-use App\Notifications\AppointmentStatusChanged;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Notifications\NewAppointmentAssigned;
-use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class AppointmentController extends Controller
 {
     use ApiResponse;
 
-    private function baseQuery()
-    {
-        return Appointment::with([
-            'pet.owner',
-            'timeSlot.workingDay',
-            'service',
-            'creator',
-        ]);
-    }
-
+    // ─── INDEX ────────────────────────────────────────────────────────────────
+    // Cada rol ve una vista diferente de la BD
     public function index(Request $request)
     {
-        $user  = Auth::user();
-        $query = $this->baseQuery();
+        $user = Auth::user();
 
+        // CLIENTE → solo ve sus propias citas (vw_citas_cliente)
         if ($user->isCliente()) {
-            $query->whereHas('pet', fn($q) => $q->where('owner_id', $user->id));
+            $citas = DB::select(
+                'SELECT * FROM vw_citas_cliente WHERE cliente_id = ?',
+                [$user->id]
+            );
+            return $this->success($citas);
         }
 
-        if ($user->isVeterinario()) {
-            $query->whereIn('status', ['confirmed', 'in_progress', 'completed']);
+        // EMPLEADO → agenda activa desde hoy (vw_agenda_empleado)
+        if ($user->isEmpleado()) {
+            $citas = DB::select('SELECT * FROM vw_agenda_empleado');
+            return $this->success($citas);
+        }
+
+        // ADMIN → todas las citas con filtros opcionales (vw_citas)
+        // Explicación: construimos el WHERE dinámicamente según los filtros
+        $where  = [];   // aquí guardamos las condiciones  ej: "status = ?"
+        $params = [];   // aquí guardamos los valores      ej: "confirmed"
+
+        if ($request->filled('status')) {
+            // El admin puede filtrar por uno o varios status separados por coma
+            $statuses    = explode(',', $request->status);
+            $marcadores  = implode(',', array_fill(0, count($statuses), '?'));
+            $where[]     = "status IN ($marcadores)";
+            $params      = array_merge($params, $statuses);
         }
 
         if ($request->filled('pet_id')) {
-            $query->where('pet_id', $request->pet_id);
+            $where[]  = 'mascota_id = ?';
+            $params[] = $request->pet_id;
         }
 
-        if ($request->filled('status')) {
-            $statuses = is_array($request->status)
-                ? $request->status
-                : explode(',', $request->status);
-            $query->whereIn('status', $statuses);
+        if ($request->filled('fecha')) {
+            $where[]  = 'fecha = ?';
+            $params[] = $request->fecha;
         }
 
-        return $this->success(
-            AppointmentResource::collection($query->orderByDesc('created_at')->get())
-        );
+        // Unimos las condiciones con AND si hay alguna
+        $sql = 'SELECT * FROM vw_citas';
+        if (!empty($where)) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $sql .= ' ORDER BY fecha DESC, start_time ASC';
+
+        $citas = DB::select($sql, $params);
+        return $this->success($citas);
     }
 
-    public function store(AppointmentRequest $request)
-    {
-        $slot = TimeSlot::findOrFail($request->time_slot_id);
-
-        if ($slot->status === 'reserved') {
-            return $this->error('El horario seleccionado ya no está disponible.', 400);
-        }
-
-        $appointment = Appointment::create([
-            'pet_id'       => $request->pet_id,
-            'time_slot_id' => $request->time_slot_id,
-            'service_id'   => $request->service_id,
-            'status'       => 'pending',
-            'is_walk_in'   => false,
-            'notes'        => $request->notes,
-            'created_by'   => Auth::id(),
-        ]);
-
-        $slot->update(['status' => 'reserved']);
-        $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
-
-        $owner = $appointment->pet->owner;
-        if ($owner) {
-            $owner->notify(new AppointmentCreated($appointment));
-        }
-    // Notificar al dueño
-    $owner = $appointment->pet->owner;
-    if ($owner) {
-        $owner->notify(new AppointmentCreated($appointment));
-    }
-        // Notificar al dueño
-        $owner = $appointment->pet->owner;
-        if ($owner) {
-            $owner->notify(new AppointmentCreated($appointment));
-        }
-
-        // Notificar al creador si no es el dueño
-        $creator = Auth::user();
-        if ($creator && $owner && $creator->id !== $owner->id) {
-            $creator->notify(new AppointmentCreated($appointment));
-        }
-        $creator = Auth::user();
-        if ($creator && $owner && $creator->id !== $owner->id) {
-            $creator->notify(new AppointmentCreated($appointment));
-        }
-    // Notificar al creador si no es el dueño
-    $creator = Auth::user();
-    if ($creator && $owner && $creator->id !== $owner->id) {
-        $creator->notify(new AppointmentCreated($appointment));
-    }
-
-        // Notificar a todos los veterinarios
-        User::veterinarios()->each(
-            fn($vet) => $vet->notify(new NewAppointmentAssigned($appointment))
-        );
-
-        //  Notificar a recepcionistas y admin que hay una cita pendiente de confirmar
-        User::whereIn('role_id', [1, 2])->where('active', true)->get()
-            ->each(fn($u) => $u->notify(new AppointmentPendingAlert($appointment)));
-
-        return $this->success(
-            new AppointmentResource($appointment),
-            'Cita registrada correctamente',
-            201
-        );
-    }
-
+    // ─── SHOW ─────────────────────────────────────────────────────────────────
     public function show($id)
     {
-        $appointment = $this->baseQuery()->findOrFail($id);
-        return $this->success(new AppointmentResource($appointment));
+        $cita = DB::select('SELECT * FROM vw_citas WHERE cita_id = ?', [$id]);
+
+        if (empty($cita)) {
+            return $this->error('Cita no encontrada', 404);
+        }
+
+        return $this->success($cita[0]);
     }
 
-    public function update(UpdateAppointmentRequest $request, $id)
+    // ─── STORE ────────────────────────────────────────────────────────────────
+    // Admin/Empleado → sp_gestionar_cita('crear')
+    // Cliente        → sp_agendar_cita()
+    public function store(Request $request)
     {
-        $appointment = Appointment::findOrFail($id);
-        $oldStatus   = $appointment->status;
-        $oldSlotId   = $appointment->time_slot_id;
-        $user        = Auth::user();
+        $user = Auth::user();
 
-        if ($user->isCliente() && $appointment->pet->owner_id !== $user->id) {
-            return $this->error('No autorizado.', 403);
-        }
-
-        $oldStatus = $appointment->status;
-
-        $wasRescheduled = false; // bandera para detectar reagendamiento
-        if ($request->filled('time_slot_id') && $request->time_slot_id != $appointment->time_slot_id) {
-            $newSlot = TimeSlot::findOrFail($request->time_slot_id);
-
-            if ($newSlot->status === 'reserved') {
-                return $this->error('El horario seleccionado está ocupado.', 400);
-            }
-
-            if ($appointment->time_slot_id) {
-                TimeSlot::find($appointment->time_slot_id)?->update([
-                    'status'  => 'available',
-                    'is_open' => true,
-                ]);
-            }
-
-            $newSlot->update(['status' => 'reserved']);
-            $wasRescheduled = true;
-        }
-
-        $appointment->update([
-            'pet_id'       => $request->pet_id       ?? $appointment->pet_id,
-            'time_slot_id' => $request->time_slot_id ?? $appointment->time_slot_id,
-            'service_id'   => $request->service_id   ?? $appointment->service_id,
-            'notes'        => $request->notes        ?? $appointment->notes,
-            'status'       => $request->status       ?? $appointment->status,
+        $request->validate([
+            'pet_id'       => 'required|integer|exists:pets,id',
+            'time_slot_id' => 'required|integer|exists:time_slots,id',
+            'service_id'   => 'required|integer|exists:services,id',
+            'notes'        => 'nullable|string',
+            'is_walk_in'   => 'boolean',
         ]);
 
-        $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service']);
-        $owner = $appointment->pet?->owner;
+        if ($user->isCliente()) {
+            // El trigger trg_validacion_cita valida el slot automáticamente
+            $resultado = DB::select('CALL sp_agendar_cita(?, ?, ?, ?, ?)', [
+                $request->pet_id,
+                $request->time_slot_id,
+                $request->service_id,
+                $request->notes,
+                $user->id,
+            ]);
 
-        if ($wasRescheduled) {
-            if ($owner) {
-                $owner->notify(new AppointmentRescheduled($appointment));
-            }
-            User::whereIn('role_id', [1, 2])->where('active', true)->get()
-                ->each(fn($u) => $u->notify(new AppointmentRescheduled($appointment)));
+            return $this->success($resultado[0], 'Cita agendada correctamente', 201);
         }
 
-        if ($request->filled('status') && $request->status !== $oldStatus) {
+        // Admin o Empleado
+        // El trigger trg_walkin_status pone 'in_progress' si is_walk_in = 1
+        $resultado = DB::select('CALL sp_gestionar_cita(?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            'crear',
+            null,                                  // p_cita_id (no aplica en crear)
+            $request->pet_id,
+            $request->time_slot_id,
+            $request->service_id,
+            $request->status ?? 'pending',
+            $request->is_walk_in ?? 0,
+            $request->notes,
+            $user->id,                             // created_by
+        ]);
 
-            if ($owner) {
-                $owner->notify(new AppointmentStatusChanged($appointment));
-            }
-
-            if ($request->status === 'confirmed') {
-                User::where('role_id', 4)->where('active', true)->get()
-                    ->each(fn($vet) => $vet->notify(new AppointmentConfirmedVet($appointment)));
-            }
-
-            if ($request->status === 'cancelled') {
-                User::whereIn('role_id', [1, 2])->where('active', true)->get()
-                    ->each(fn($u) => $u->notify(new AppointmentCancelledAlert($appointment, Auth::user())));
-            }
-        }
-
-        $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
-
-        return $this->success(
-            new AppointmentResource($appointment),
-            'Cita actualizada correctamente'
-        );
+        return $this->success($resultado[0], 'Cita registrada correctamente', 201);
     }
 
+    // ─── UPDATE ───────────────────────────────────────────────────────────────
+    // Detecta qué acción hacer según los datos que llegan
+    public function update(Request $request, $id)
+    {
+        $user = Auth::user();
+
+        // CONFIRMAR → Empleado/Admin cambian pending → confirmed
+        if ($request->input('accion') === 'confirmar') {
+            $resultado = DB::select('CALL sp_confirmar_cita(?)', [$id]);
+            return $this->success($resultado[0], 'Cita confirmada');
+        }
+
+        // COMPLETAR → Empleado/Admin cambian confirmed/in_progress → completed
+        if ($request->input('accion') === 'completar') {
+            $resultado = DB::select('CALL sp_completar_cita(?)', [$id]);
+            return $this->success($resultado[0], 'Cita completada');
+        }
+
+        // REAGENDAR → cambia el time_slot (Empleado o Cliente)
+        if ($request->filled('time_slot_id')) {
+            // Si es cliente pasamos su id para que el SP valide que es su cita
+            // Si es Admin/Empleado pasamos NULL (sin validación de ownership)
+            $owner_id = $user->isCliente() ? $user->id : null;
+
+            $resultado = DB::select('CALL sp_reagendar_cita(?, ?, ?)', [
+                $id,
+                $request->time_slot_id,
+                $owner_id,
+            ]);
+
+            return $this->success($resultado[0], 'Cita reagendada');
+        }
+
+        // EDITAR notas o status (Admin/Empleado)
+        $request->validate([
+            'status' => 'nullable|in:pending,confirmed,in_progress,completed,cancelled',
+            'notes'  => 'nullable|string',
+        ]);
+
+        $resultado = DB::select('CALL sp_gestionar_cita(?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            'editar',
+            $id,
+            null, null, null,          // pet_id, slot_id, service_id (no cambian en editar)
+            $request->status,
+            null,                      // is_walk_in (no cambia en editar)
+            $request->notes,
+            null,                      // created_by (no cambia)
+        ]);
+
+        return $this->success($resultado[0], 'Cita actualizada');
+    }
+
+    // ─── DESTROY ──────────────────────────────────────────────────────────────
+    // Admin/Empleado → sp_gestionar_cita('cancelar')
+    // Cliente        → sp_cancelar_cita() (valida que sea su cita)
     public function destroy($id)
     {
-        $appointment = $this->baseQuery()->findOrFail($id);
-        $user        = Auth::user();
+        $user = Auth::user();
 
-        // Cliente solo puede cancelar sus propias citas
-        if ($user->isCliente() && $appointment->pet->owner_id !== $user->id) {
-            return $this->error('No autorizado.', 403);
-        }
-
-        if (!$appointment->isCancellable()) {
-            return $this->error('Esta cita no puede cancelarse en su estado actual.', 422);
-        }
-
-        if ($appointment->time_slot_id) {
-            TimeSlot::find($appointment->time_slot_id)?->update([
-                'status'  => 'available',
-                'is_open' => true,
+        if ($user->isCliente()) {
+            $resultado = DB::select('CALL sp_cancelar_cita(?, ?)', [
+                $id,
+                $user->id,   // el SP verifica que la cita le pertenece
             ]);
+
+            return $this->success($resultado[0], 'Cita cancelada correctamente');
         }
 
-        $appointment->update(['status' => 'cancelled']);
+        // Admin o Empleado: el trigger trg_liberar_slot libera el slot solo
+        $resultado = DB::select('CALL sp_gestionar_cita(?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            'cancelar',
+            $id,
+            null, null, null, null, null, null, null,
+        ]);
 
-        // Notificar al dueño
-        $owner = $appointment->pet?->owner;
-        if ($owner) {
-            $owner->notify(new AppointmentCancelled($appointment));
-        }
+        return $this->success($resultado[0], 'Cita cancelada correctamente');
+    }
 
-        // Notificar a recepcionistas y admin que se canceló una cita
-        User::whereIn('role_id', [1, 2])->where('active', true)->get()
-            ->each(fn($u) => $u->notify(new AppointmentCancelledAlert($appointment, Auth::user())));
-
-        return $this->success(null, 'Cita cancelada correctamente');
+    // ─── REPORTE (solo Admin) ─────────────────────────────────────────────────
+    // Devuelve el agregado por día desde vw_reporte_citas
+    public function reporte()
+    {
+        $reporte = DB::select('SELECT * FROM vw_reporte_citas');
+        return $this->success($reporte);
     }
 }

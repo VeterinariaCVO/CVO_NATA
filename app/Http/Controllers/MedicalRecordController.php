@@ -7,7 +7,6 @@ use App\Http\Resources\MedicalRecordResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\Appointment;
 use App\Models\MedicalRecord;
-use App\Notifications\AppointmentCompleted;
 use Illuminate\Support\Facades\Auth;
 
 class MedicalRecordController extends Controller
@@ -24,10 +23,12 @@ class MedicalRecordController extends Controller
             'veterinarian',
         ]);
 
+        // Cliente solo ve los expedientes de sus mascotas
         if ($user->isCliente()) {
             $query->whereHas('appointment.pet', fn($q) => $q->where('owner_id', $user->id));
         }
 
+        // Veterinario solo ve los expedientes que él creó
         if ($user->isVeterinario()) {
             $query->where('veterinarian_id', $user->id);
         }
@@ -45,19 +46,13 @@ class MedicalRecordController extends Controller
             return $this->error('Solo se puede registrar un expediente para citas confirmadas o en curso.', 422);
         }
 
+        // Al insertar el registro, el trigger trg_completar_cita
+        // cambia el status de la cita a 'completed' automáticamente.
+        // No necesitamos hacer $appointment->update(['status' => 'completed']) aquí.
         $record = MedicalRecord::create(array_merge(
             $request->validated(),
             ['veterinarian_id' => Auth::id()]
         ));
-
-        $appointment->update(['status' => 'completed']);
-
-
-        // que tiene un mensaje más específico con el link al historial clínico
-        $owner = $appointment->pet?->owner;
-        if ($owner) {
-            $owner->notify(new AppointmentCompleted($appointment));
-        }
 
         return $this->success(
             new MedicalRecordResource($record->load([
@@ -88,7 +83,7 @@ class MedicalRecordController extends Controller
         $record = MedicalRecord::findOrFail($id);
 
         $data = $request->validated();
-        unset($data['appointment_id']);
+        unset($data['appointment_id']); // el appointment no cambia al editar
 
         $record->update($data);
 
