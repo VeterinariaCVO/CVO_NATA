@@ -39,11 +39,18 @@ class AppointmentCancelled extends Notification implements ShouldBroadcast
     public function toBroadcast($notifiable): BroadcastMessage
 {
     return new BroadcastMessage([
-        'data' => array_merge($this->toDatabase($notifiable), [
+        'data' => [
+            'id'         => $this->id,
+            'title'      => $this->data['title'] ?? 'Cita Actualizada',
+            'message'    => $this->data['message'] ?? '',
             'created_at' => now()->toIso8601String(),
-        ])
+            'type'       => 'appointment_cancelled',
+        ]
     ]);
 }
+
+
+
 
     public function toMail(object $notifiable): MailMessage
     {
