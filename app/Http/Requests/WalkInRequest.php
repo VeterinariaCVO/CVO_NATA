@@ -14,7 +14,6 @@ class WalkInRequest extends FormRequest
         return [
             'pet_id'       => 'required|exists:pets,id',
             'service_id'   => 'required|exists:services,id',
-            'time_slot_id' => 'nullable|exists:time_slots,id',
             'notes'        => 'nullable|string|max:500',
         ];
     }

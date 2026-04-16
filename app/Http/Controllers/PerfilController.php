@@ -10,9 +10,9 @@ class PerfilController extends Controller
 {
     public function show()
     {
-        return response()->json([
-            'success' => true,
-            'data'    => Auth::user()
+    return response()->json([
+        'success' => true,
+        'data'    => new \App\Http\Resources\UserResource(Auth::user())
         ]);
     }
 
