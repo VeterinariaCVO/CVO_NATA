@@ -53,7 +53,7 @@ class AppointmentCreated extends Notification implements ShouldBroadcast
         return (new MailMessage)
             ->subject('Cita registrada — Veterinaria del Oriente')
             ->greeting("¡Hola, {$notifiable->name}!")
-            ->line("Se ha registrado una cita para tu mascota **{$this->appointment->pet?->name}**.")
+            ->line("Hemos registrado la cita de tu mascota. Te avisaremos en cuanto sea confirmada. **{$this->appointment->pet?->name}**.")
             ->line("**Servicio:** {$this->appointment->service?->name}")
             ->line("**Fecha:** {$day?->date}")
             ->line("**Horario:** {$slot?->start_time} — {$slot?->end_time}")

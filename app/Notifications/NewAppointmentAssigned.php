@@ -38,10 +38,13 @@ class NewAppointmentAssigned extends Notification implements ShouldBroadcast
         ];
     }
 
-    public function toBroadcast($notifiable): BroadcastMessage
-    {
-        return new BroadcastMessage([
-            'data' => $this->toDatabase($notifiable)
-        ]);
-    }
+        public function toBroadcast($notifiable): BroadcastMessage
+{
+    return new BroadcastMessage([
+        'data' => array_merge($this->toDatabase($notifiable), [
+            'created_at' => now()->toIso8601String(),
+        ])
+    ]);
+}
+
 }
