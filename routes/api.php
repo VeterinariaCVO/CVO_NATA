@@ -123,7 +123,7 @@ Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
     Route::get('/empleado/clients/{id}',  [UserController::class, 'showClient']);
 
     // Walk-in (CU-20)
-    Route::post('/walk-in',              [WalkInController::class, 'store']);
+    Route::post('/recep/walk-in',              [WalkInController::class, 'store']);
 
     // Mascotas
     Route::apiResource('/pets', PetController::class);
