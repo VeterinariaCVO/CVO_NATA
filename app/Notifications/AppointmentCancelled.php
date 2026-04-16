@@ -25,14 +25,16 @@ class AppointmentCancelled extends Notification implements ShouldBroadcast
         $slot = $this->appointment->timeSlot;
         $day  = $slot?->workingDay;
 
+        $date = $day?->date ? \Carbon\Carbon::parse($day->date)->format('d/m/Y') : 'N/A';
+
         return [
             'type'           => 'appointment_cancelled',
             'title'          => 'Cita cancelada',
-            'message'        => "La cita de {$this->appointment->pet?->name} del {$day?->date} ha sido cancelada.",
+            'message'        => "La cita de {$this->appointment->pet?->name} del {$date} ha sido cancelada.",
             'appointment_id' => $this->appointment->id,
             'pet_name'       => $this->appointment->pet?->name,
             'service'        => $this->appointment->service?->name,
-            'date'           => $day?->date,
+            'date'           => $date,
         ];
     }
 
@@ -63,7 +65,7 @@ class AppointmentCancelled extends Notification implements ShouldBroadcast
             ->greeting("¡Hola, {$notifiable->name}!")
             ->line("Te informamos que la cita de tu mascota **{$this->appointment->pet?->name}** ha sido cancelada.")
             ->line("**Servicio:** {$this->appointment->service?->name}")
-            ->line("**Fecha:** {$day?->date}")
+            ->line("**Fecha:** {$this->toDatabase($notifiable)['date']}")
             ->line("**Horario:** {$slot?->start_time} — {$slot?->end_time}")
             ->action('Agendar nueva cita', url('/client/citas'))
             ->line('Si tienes dudas, no dudes en contactarnos.');

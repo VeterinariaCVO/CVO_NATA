@@ -31,28 +31,34 @@ class AppointmentRescheduled extends Notification implements ShouldBroadcast
     {
         $slot = $this->appointment->timeSlot;
         $day  = $slot?->workingDay;
+         $date = $day?->date ? \Carbon\Carbon::parse($day->date)->format('d/m/Y') : 'N/A';
 
         return [
             'type'           => 'appointment_rescheduled',
             'title'          => 'Cita reagendada',
-            'message'        => "La cita de {$this->appointment->pet?->name} ha sido reagendada para el {$day?->date} de {$slot?->start_time} a {$slot?->end_time}.",
+            'message'        => "La cita de {$this->appointment->pet?->name} ha sido reagendada para el {$date} de {$slot?->start_time} a {$slot?->end_time}.",
             'appointment_id' => $this->appointment->id,
             'pet_name'       => $this->appointment->pet?->name,
             'service'        => $this->appointment->service?->name,
-            'date'           => $day?->date,
+            'date'           => $date,
             'start_time'     => $slot?->start_time,
             'end_time'       => $slot?->end_time,
         ];
     }
 
-       public function toBroadcast($notifiable): BroadcastMessage
+     public function toBroadcast($notifiable): BroadcastMessage
 {
+    $data = $this->toDatabase($notifiable);
+
     return new BroadcastMessage([
-        'data' => array_merge($this->toDatabase($notifiable), [
-            'created_at' => now()->toIso8601String(),
-        ])
+        'type'       => $data['type'],
+        'title'      => $data['title'],
+        'message'    => $data['message'],
+        'created_at' => now()->format('Y-m-d H:i'),
+        'data'       => $data,
     ]);
 }
+
 
 
     public function toMail(object $notifiable): MailMessage
@@ -65,7 +71,7 @@ class AppointmentRescheduled extends Notification implements ShouldBroadcast
             ->greeting("¡Hola, {$notifiable->name}!")
             ->line("La cita de la mascota **{$this->appointment->pet?->name}** ha sido reagendada.")
             ->line("**Servicio:** {$this->appointment->service?->name}")
-            ->line("**Nueva fecha:** {$day?->date}")
+            ->line("**Nueva fecha:** {$this->toDatabase($notifiable)['date']}")
             ->line("**Nuevo horario:** {$slot?->start_time} — {$slot?->end_time}")
             ->action('Ver detalle de la cita', url('/citas/' . $this->appointment->id))
             ->line('Si tienes dudas, no dudes en contactarnos.');

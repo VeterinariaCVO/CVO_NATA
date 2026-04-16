@@ -28,24 +28,29 @@ class AppointmentCompleted extends Notification implements ShouldBroadcast
     {
         $slot = $this->appointment->timeSlot;
         $day  = $slot?->workingDay;
+        $date = $day?->date ? \Carbon\Carbon::parse($day->date)->format('d/m/Y') : 'N/A';
 
         return [
             'type'           => 'appointment_completed',
             'title'          => 'Cita completada',
-            'message'        => "La cita de {$this->appointment->pet?->name} del {$day?->date} ha sido completada. Ya puedes consultar el expediente médico.",
+            'message'        => "La cita de {$this->appointment->pet?->name} del {$date} ha sido completada. Ya puedes consultar el expediente médico.",
             'appointment_id' => $this->appointment->id,
             'pet_name'       => $this->appointment->pet?->name,
             'service'        => $this->appointment->service?->name,
-            'date'           => $day?->date,
+            'date'           => $date,
         ];
     }
 
-    public function toBroadcast($notifiable): BroadcastMessage
+     public function toBroadcast($notifiable): BroadcastMessage
 {
+    $data = $this->toDatabase($notifiable);
+
     return new BroadcastMessage([
-        'data' => array_merge($this->toDatabase($notifiable), [
-            'created_at' => now()->toIso8601String(),
-        ])
+        'type'       => $data['type'],
+        'title'      => $data['title'],
+        'message'    => $data['message'],
+        'created_at' => now()->format('Y-m-d H:i'),
+        'data'       => $data,
     ]);
 }
 
@@ -59,7 +64,7 @@ class AppointmentCompleted extends Notification implements ShouldBroadcast
             ->greeting("¡Hola, {$notifiable->name}!")
             ->line("La cita de tu mascota **{$this->appointment->pet?->name}** ha sido completada exitosamente.")
             ->line("**Servicio:** {$this->appointment->service?->name}")
-            ->line("**Fecha:** {$day?->date}")
+            ->line("**Fecha:** {$this->toDatabase($notifiable)['date']}")
             ->line("Ya puedes consultar el expediente médico registrado por el veterinario.")
             ->action('Ver historial clínico', url('/client/mascotas/' . $this->appointment->pet?->id . '/historial'))
             ->line('Gracias por confiar el cuidado de tu mascota en nuestras manos.');

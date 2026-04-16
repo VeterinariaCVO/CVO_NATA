@@ -28,6 +28,7 @@ class AppointmentReminder extends Notification implements ShouldBroadcast
     {
         $slot = $this->appointment->timeSlot;
         $day  = $slot?->workingDay;
+         $date = $day?->date ? \Carbon\Carbon::parse($day->date)->format('d/m/Y') : 'N/A';
 
         return [
             'type'           => 'appointment_reminder',
@@ -36,20 +37,25 @@ class AppointmentReminder extends Notification implements ShouldBroadcast
             'appointment_id' => $this->appointment->id,
             'pet_name'       => $this->appointment->pet?->name,
             'service'        => $this->appointment->service?->name,
-            'date'           => $day?->date,
+            'date'           => $date,
             'start_time'     => $slot?->start_time,
             'end_time'       => $slot?->end_time,
         ];
     }
 
-       public function toBroadcast($notifiable): BroadcastMessage
+        public function toBroadcast($notifiable): BroadcastMessage
 {
+    $data = $this->toDatabase($notifiable);
+
     return new BroadcastMessage([
-        'data' => array_merge($this->toDatabase($notifiable), [
-            'created_at' => now()->toIso8601String(),
-        ])
+        'type'       => $data['type'],
+        'title'      => $data['title'],
+        'message'    => $data['message'],
+        'created_at' => now()->format('Y-m-d H:i'),
+        'data'       => $data,
     ]);
 }
+
 
 
     public function toMail(object $notifiable): MailMessage
@@ -63,7 +69,7 @@ class AppointmentReminder extends Notification implements ShouldBroadcast
             ->line("Te recordamos que mañana tienes una cita programada.")
             ->line("**Mascota:** {$this->appointment->pet?->name}")
             ->line("**Servicio:** {$this->appointment->service?->name}")
-            ->line("**Fecha:** {$day?->date}")
+            ->line("**Fecha:** {$this->toDatabase($notifiable)['date']}")
             ->line("**Horario:** {$slot?->start_time} — {$slot?->end_time}")
             ->line('---')
             ->line('¿Vas a poder asistir?')

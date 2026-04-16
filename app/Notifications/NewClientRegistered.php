@@ -37,14 +37,19 @@ class NewClientRegistered extends Notification implements ShouldBroadcast
         ];
     }
 
-        public function toBroadcast($notifiable): BroadcastMessage
+      public function toBroadcast($notifiable): BroadcastMessage
 {
+    $data = $this->toDatabase($notifiable);
+
     return new BroadcastMessage([
-        'data' => array_merge($this->toDatabase($notifiable), [
-            'created_at' => now()->toIso8601String(),
-        ])
+        'type'       => $data['type'],
+        'title'      => $data['title'],
+        'message'    => $data['message'],
+        'created_at' => now()->format('Y-m-d H:i'),
+        'data'       => $data,
     ]);
 }
+
 
 
     public function toMail(object $notifiable): MailMessage
