@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\WalkInRequest;
 use App\Http\Resources\AppointmentResource;
-use App\Traits\ApiResponse;
+use App\Http\Traits\ApiResponse;
 use App\Models\Appointment;
 use App\Models\User;
 use App\Notifications\AppointmentCreated;
