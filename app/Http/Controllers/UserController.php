@@ -132,4 +132,12 @@ class UserController extends Controller
             'pets'   => $client->pets,
         ]);
     }
+    public function veterinarians()
+{
+    $vets = \App\Models\User::where('role_id', 4)
+                ->where('active', true)
+                ->get(['id', 'name', 'email']);
+
+    return response()->json(['success' => true, 'data' => $vets]);
+}
 }
