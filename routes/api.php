@@ -20,7 +20,7 @@ Route::post('/login',    [ApiAuthController::class, 'login']);
 
 
     // 👇 Agrega esta línea
-Route::get('/empleado/veterinarios', [UserController::class, 'veterinarios']);
+Route::get('/empleado/veterinarios', [UserController::class, 'veterinarians']);
 // ─── AUTENTICADO (cualquier rol) ──────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
 
