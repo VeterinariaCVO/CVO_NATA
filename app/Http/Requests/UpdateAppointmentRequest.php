@@ -17,7 +17,8 @@ class UpdateAppointmentRequest extends FormRequest
             'pet_id'       => 'sometimes|exists:pets,id',
             'service_id'   => 'sometimes|exists:services,id',
             'notes'        => 'nullable|string|max:500',
-            'status'       => 'sometimes|in:pending,confirmed,in_progress,completed,cancelled',
+            'vet_id' => 'nullable|exists:users,id',
+            'status' => 'required|in:pending,confirmed,arrived,in_progress,completed,cancelled',
         ];
     }
 

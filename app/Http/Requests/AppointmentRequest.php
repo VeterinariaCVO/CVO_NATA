@@ -16,7 +16,9 @@ class AppointmentRequest extends FormRequest
             'pet_id'       => 'required|exists:pets,id',
             'time_slot_id' => 'required|exists:time_slots,id',
             'service_id'   => 'required|exists:services,id',
+            'status'       => 'nullable|in:pending,confirmed,arrived,in_progress,completed,cancelled',
             'notes'        => 'nullable|string|max:500',
+            'vet_id'       => 'nullable|exists:users,id',
         ];
     }
 

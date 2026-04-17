@@ -8,7 +8,7 @@ class Appointment extends Model
 {
 
     protected $fillable = [
-        'pet_id', 'time_slot_id', 'service_id',
+        'pet_id', 'time_slot_id', 'service_id','vet_id',
         'status', 'is_walk_in', 'notes', 'created_by',
     ];
 
@@ -24,6 +24,13 @@ class Appointment extends Model
     {
         return $this->belongsTo(Pet::class);
     }
+
+    public function vet()
+    {
+        return $this->belongsTo(User::class, 'vet_id');
+    }
+
+
 
     public function timeSlot()
     {
@@ -55,5 +62,15 @@ class Appointment extends Model
     public function isCompleted(): bool
     {
         return $this->status === 'completed';
+    }
+
+    public function isInProgress(): bool
+    {
+        return $this->status === 'in_progress';
+    }
+
+    public function isArrived(): bool
+    {
+        return $this->status === 'arrived';
     }
 }

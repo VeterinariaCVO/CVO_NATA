@@ -65,7 +65,9 @@ class AppointmentController extends Controller
         }
 
         if ($user->isVeterinario()) {
-            $query->whereIn('status', ['confirmed', 'in_progress', 'completed']);
+            // Ahora filtra por estado Y por el ID del doctor que inició sesión
+            $query->where('vet_id', $user->id)
+                  ->whereIn('status', ['confirmed', 'arrived', 'in_progress', 'completed']);
         }
 
         if ($request->filled('pet_id')) {
@@ -97,7 +99,8 @@ class AppointmentController extends Controller
             'pet_id'       => $request->pet_id,
             'time_slot_id' => $request->time_slot_id,
             'service_id'   => $request->service_id,
-            'status'       => 'pending',
+            'status'       => $request->status ?? 'pending', // Toma el confirmado de Vue, si no hay, pone pending
+            'vet_id'       => $request->vet_id ?? null,      // Guarda al doctor si Vue lo envió
             'is_walk_in'   => false,
             'notes'        => $request->notes,
             'created_by'   => Auth::id(),
@@ -161,7 +164,7 @@ class AppointmentController extends Controller
         return $this->success(new AppointmentResource($appointment));
     }
 
-    public function update(UpdateAppointmentRequest $request, $id)
+   public function update(UpdateAppointmentRequest $request, $id)
     {
         $appointment = Appointment::with(['pet.owner', 'timeSlot.workingDay', 'service', 'creator'])->findOrFail($id);
         $oldStatus   = $appointment->status;
@@ -258,6 +261,22 @@ class AppointmentController extends Controller
                         );
                     });
             }
+
+            // 👇 NUEVO BLOQUE AGREGADO CORRECTAMENTE 👇
+            if ($request->status === 'arrived') {
+                User::where('role_id', 4)
+                    ->where('active', true)
+                    ->get()
+                    ->each(function ($vet) use ($appointment) {
+                        $this->notifyOnce(
+                            $vet,
+                            'appointment_status_changed',
+                            $appointment->id,
+                            new AppointmentStatusChanged($appointment)
+                        );
+                    });
+            }
+            // 👆 ------------------------------------ 👆
 
             if ($request->status === 'cancelled') {
                 User::whereIn('role_id', [1, 2])

@@ -16,10 +16,14 @@ return new class extends Migration
                   ->constrained('time_slots')
                   ->nullOnDelete();
             $table->foreignId('service_id')->constrained('services');
+            $table->foreignId('vet_id')->nullable()->constrained('users')->nullOnDelete();
+
+            // ¡AQUÍ ESTÁ LA MAGIA! Agregamos 'arrived' a la lista permitida
             $table->enum('status', [
-                'pending',       // cita agendada, esperando confirmación
-                'confirmed',     // cita confirmada
-                'in_progress',   // en curso (walk-in entra directo aquí)
+                'pending',       // cita solicitada (internet), esperando confirmación
+                'confirmed',     // cita confirmada (agendada), paciente por llegar
+                'arrived',       // ¡NUEVO! paciente ya llegó y está en sala de espera
+                'in_progress',   // en curso (con el veterinario)
                 'completed',     // atención finalizada
                 'cancelled',     // cancelada (solo antes de in_progress)
             ])->default('pending');

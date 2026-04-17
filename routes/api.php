@@ -141,7 +141,6 @@ Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
     Route::post('/recep/appointments',          [AppointmentController::class, 'store']);
     Route::put('/recep/appointments/{id}', [AppointmentController::class, 'update']);
     Route::delete('/recep/appointments/{id}', [AppointmentController::class, 'destroy']);
-
 });
 
 
