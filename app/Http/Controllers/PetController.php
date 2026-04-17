@@ -34,8 +34,6 @@ class PetController extends Controller
         return $this->success(PetResource::collection($query->orderBy('name')->get()));
     }
 
-
-
     public function show($id)
     {
         $pet = Pet::with('owner')->findOrFail($id);
@@ -44,9 +42,15 @@ class PetController extends Controller
 
     public function store(PetRequest $request)
     {
+        if (Auth::user()->isCliente()) {
+            $total = Pet::where('owner_id', Auth::id())->count();
+            if ($total >= 8) {
+                return $this->error('Has alcanzado el límite de 8 mascotas.', 422);
+            }
+        }
+
         $data = $request->validated();
 
-        // Si es cliente, el owner_id siempre es él mismo
         if (Auth::user()->isCliente()) {
             $data['owner_id'] = Auth::id();
         }
@@ -62,15 +66,7 @@ class PetController extends Controller
             'Mascota registrada exitosamente',
             201
         );
-        if (Auth::user()->isCliente()) {
-        $total = Pet::where('owner_id', Auth::id())->count();
-        if ($total >= 8) {
-        return $this->error('Has alcanzado el límite de 8 mascotas.', 422);
-             }
-        }
     }
-
-
 
     public function update(PetRequest $request, $id)
     {
@@ -82,9 +78,20 @@ class PetController extends Controller
                 Storage::disk('public')->delete($pet->photo_path);
             }
             $data['photo_path'] = $request->file('photo')->store('pets', 'public');
+        } elseif ($request->input('remove_photo')) {
+            if ($pet->photo_path) {
+                Storage::disk('public')->delete($pet->photo_path);
+            }
+            $data['photo_path'] = null;
         }
 
-        $pet->update($data);
+        $pet->fill($data);
+
+        if (array_key_exists('photo_path', $data)) {
+            $pet->photo_path = $data['photo_path'];
+        }
+
+        $pet->save();
 
         return $this->success(
             new PetResource($pet->load('owner')),

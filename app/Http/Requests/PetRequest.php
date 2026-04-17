@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Contracts\Validation\ValidationRule;
 
 class PetRequest extends FormRequest
 {
@@ -25,6 +24,7 @@ class PetRequest extends FormRequest
             'sex'           => "{$prefix}|in:male,female",
             'age'           => 'nullable|integer|min:0|max:360',
             'photo'         => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
+            'remove_photo'  => 'nullable',
             'active'        => 'nullable|boolean',
             'owner_id'      => in_array($user?->role_id, [1, 2, 4])
                                 ? "{$prefix}|integer|exists:users,id"
