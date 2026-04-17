@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\Broadcast;
 Route::post('/register', [ApiAuthController::class, 'register']);
 Route::post('/login',    [ApiAuthController::class, 'login']);
 
+
+    // 👇 Agrega esta línea
+    Route::get('/empleado/veterinarios', [UserController::class, 'veterinarians']);
 // ─── AUTENTICADO (cualquier rol) ──────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
 
