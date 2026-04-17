@@ -97,7 +97,7 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::patch('/admin/working-days/{workingDay}/time-slots/enable-all', [TimeSlotController::class, 'enableAllForDay']);
 
     // Walk-in
-    Route::post('/walk-in',[WalkInController::class, 'store']);
+    Route::post('/walk-in',               [WalkInController::class, 'store']);
 
     // Mascotas (gestion completa)
     Route::get('/admin1/pets',          [PetController::class, 'index']);
@@ -116,6 +116,11 @@ Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
 
 // ─── EMPLEADO / RECEPCIONISTA (role 2) ────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
+
+
+    // 👇 Agrega esta línea
+    Route::get('/empleado/veterinarios', [UserController::class, 'veterinarians']);
+
     Route::get('/recep/pets',          [PetController::class, 'index']);
     Route::get('/recep/pets/{id}',     [PetController::class, 'show']);
     // Clientes
@@ -133,7 +138,9 @@ Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
     Route::post('/recep/appointments',          [AppointmentController::class, 'store']);
     Route::put('/recep/appointments/{id}', [AppointmentController::class, 'update']);
     Route::delete('/recep/appointments/{id}', [AppointmentController::class, 'destroy']);
+
 });
+
 
 // ─── CITAS: Cliente, Recepcionista y Admin (roles 1, 2, 3) ───────────────────
 Route::middleware(['auth:sanctum', 'role:1,2,3'])->group(function () {
