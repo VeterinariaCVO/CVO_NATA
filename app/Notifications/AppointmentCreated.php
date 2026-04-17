@@ -3,24 +3,17 @@
 namespace App\Notifications;
 
 use App\Models\Appointment;
-use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 
-class AppointmentCreated extends Notification implements ShouldQueue
+class AppointmentCreated extends Notification implements ShouldBroadcast
 {
     use Queueable;
 
-    public int $tries = 3;
-    public int $timeout = 120;
-
-    public function __construct(public Appointment $appointment)
-    {
-        $this->afterCommit();
-    }
+    public function __construct(public Appointment $appointment) {}
 
     public function via(object $notifiable): array
     {
@@ -31,7 +24,7 @@ class AppointmentCreated extends Notification implements ShouldQueue
     {
         $slot = $this->appointment->timeSlot;
         $day  = $slot?->workingDay;
-        $date = $day?->date ? Carbon::parse($day->date)->format('d/m/Y') : 'N/A';
+         $date = $day?->date ? \Carbon\Carbon::parse($day->date)->format('d/m/Y') : 'N/A';
 
         return [
             'type'           => 'appointment_created',
@@ -46,31 +39,32 @@ class AppointmentCreated extends Notification implements ShouldQueue
         ];
     }
 
-    public function toBroadcast(object $notifiable): BroadcastMessage
-    {
-        $data = $this->toDatabase($notifiable);
+        public function toBroadcast($notifiable): BroadcastMessage
+{
+    $data = $this->toDatabase($notifiable);
 
-        return new BroadcastMessage([
-            'type'       => $data['type'],
-            'title'      => $data['title'],
-            'message'    => $data['message'],
-            'created_at' => now()->format('Y-m-d H:i'),
-            'data'       => $data,
-        ]);
-    }
+    return new BroadcastMessage([
+        'type'       => $data['type'],
+        'title'      => $data['title'],
+        'message'    => $data['message'],
+        'created_at' => now()->format('Y-m-d H:i'),
+        'data'       => $data,
+    ]);
+}
+
 
     public function toMail(object $notifiable): MailMessage
     {
         $slot = $this->appointment->timeSlot;
-        $date = $this->toDatabase($notifiable)['date'];
+        $day  = $slot?->workingDay;
 
         return (new MailMessage)
             ->subject('Cita registrada — Veterinaria del Oriente')
             ->greeting("¡Hola, {$notifiable->name}!")
-            ->line("Hemos registrado la cita de tu mascota {$this->appointment->pet?->name}.")
-            ->line("Servicio: {$this->appointment->service?->name}")
-            ->line("Fecha: {$date}")
-            ->line("Horario: {$slot?->start_time} — {$slot?->end_time}")
+            ->line("Hemos registrado la cita de tu mascota. Te avisaremos en cuanto sea confirmada. **{$this->appointment->pet?->name}**.")
+            ->line("**Servicio:** {$this->appointment->service?->name}")
+            ->line("**Fecha:** {$this->toDatabase($notifiable)['date']}")
+            ->line("**Horario:** {$slot?->start_time} — {$slot?->end_time}")
             ->action('Ver mis citas', url('/client/citas'))
             ->line('Gracias por confiar el cuidado de tu mascota en nuestras manos.');
     }
