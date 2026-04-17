@@ -97,7 +97,7 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
     Route::patch('/admin/working-days/{workingDay}/time-slots/enable-all', [TimeSlotController::class, 'enableAllForDay']);
 
     // Walk-in
-    Route::post('/walk-in',               [WalkInController::class, 'store']);
+    Route::post('/walk-in',[WalkInController::class, 'store']);
 
     // Mascotas (gestion completa)
     Route::get('/admin1/pets',          [PetController::class, 'index']);
