@@ -4,9 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\WalkInRequest;
 use App\Http\Resources\AppointmentResource;
-use App\Http\Traits\ApiResponse;
+use App\Traits\ApiResponse;
 use App\Models\Appointment;
-use App\Models\TimeSlot;
 use App\Models\User;
 use App\Notifications\AppointmentCreated;
 use App\Notifications\WalkInRegistered;
@@ -16,26 +15,49 @@ class WalkInController extends Controller
 {
     use ApiResponse;
 
+    /**
+     * Registrar atención sin cita (walk-in)
+     */
     public function store(WalkInRequest $request)
     {
+        // Crear la cita walk-in
         $appointment = Appointment::create([
-            'pet_id'     => $request->pet_id,
+            'pet_id'       => $request->pet_id,
             'time_slot_id' => null,
-            'service_id' => $request->service_id,
-            'status'     => 'in_progress',
-            'is_walk_in' => true,
-            'notes'      => $request->notes,
-            'created_by' => Auth::id(),
+            'service_id'   => $request->service_id,
+            'status'       => 'in_progress',
+            'is_walk_in'   => true,
+            'notes'        => $request->notes,
+            'created_by'   => Auth::id(),
         ]);
 
-        $appointment->load(['pet.owner', 'timeSlot.workingDay', 'service', 'creator']);
+        // Recargar relaciones completas (IMPORTANTE para notificaciones)
+        $appointment = Appointment::with([
+            'pet.owner',
+            'timeSlot.workingDay',
+            'service',
+            'creator',
+        ])->findOrFail($appointment->id);
 
-        User::where('role_id', 4)->where('active', true)->get()
-            ->each(fn($vet) => $vet->notify(new WalkInRegistered($appointment)));
+        // Notificar veterinarios activos
+        $vets = User::where('role_id', 4)
+            ->where('active', true)
+            ->get();
 
-        User::where('role_id', 1)->where('active', true)->get()
-            ->each(fn($admin) => $admin->notify(new WalkInRegistered($appointment)));
+        foreach ($vets as $vet) {
+            $vet->notify(new WalkInRegistered($appointment));
+        }
 
+        // Notificar admins activos
+        $admins = User::where('role_id', 1)
+            ->where('active', true)
+            ->get();
+
+        foreach ($admins as $admin) {
+            $admin->notify(new WalkInRegistered($appointment));
+        }
+
+        // Notificar al dueño de la mascota
         $owner = $appointment->pet?->owner;
         if ($owner) {
             $owner->notify(new AppointmentCreated($appointment));
