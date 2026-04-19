@@ -31,6 +31,7 @@ class AppointmentStatusChanged extends Notification implements ShouldBroadcast
         return match($this->appointment->status) {
             'pending'     => 'pendiente',
             'confirmed'   => 'confirmada',
+            'arrived'     => 'en sala de espera',
             'in_progress' => 'en curso',
             'completed'   => 'completada',
             'cancelled'   => 'cancelada',

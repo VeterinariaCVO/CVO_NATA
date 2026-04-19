@@ -36,6 +36,11 @@ class AppointmentResource extends JsonResource
                 'start_time' => $this->timeSlot->start_time,
                 'end_time'   => $this->timeSlot->end_time,
             ] : null,
+
+            'vet'         => $this->vet ? [
+                'id'   => $this->vet->id,
+                'name' => $this->vet->name,
+            ] : null,
             'created_by'  => $this->creator?->name,
             'created_at'  => $this->created_at?->format('Y-m-d H:i'),
         ];

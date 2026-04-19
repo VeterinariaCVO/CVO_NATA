@@ -65,8 +65,9 @@ class AppointmentController extends Controller
         }
 
         if ($user->isVeterinario()) {
-            $query->whereIn('status', ['confirmed', 'in_progress', 'completed']);
-        }
+    $query->where('vet_id', $user->id) // Solo sus pacientes
+          ->whereIn('status', ['confirmed', 'arrived', 'in_progress', 'completed']);
+}
 
         if ($request->filled('pet_id')) {
             $query->where('pet_id', $request->pet_id);
@@ -255,6 +256,20 @@ class AppointmentController extends Controller
                             'appointment_confirmed_vet',
                             $appointment->id,
                             new AppointmentConfirmedVet($appointment)
+                        );
+                    });
+            }
+
+            if ($request->status === 'arrived') {
+                User::where('role_id', 4)
+                    ->where('active', true)
+                    ->get()
+                    ->each(function ($vet) use ($appointment) {
+                        $this->notifyOnce(
+                            $vet,
+                            'appointment_status_changed',
+                            $appointment->id,
+                            new AppointmentStatusChanged($appointment)
                         );
                     });
             }

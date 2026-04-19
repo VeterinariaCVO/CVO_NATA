@@ -8,7 +8,7 @@ class Appointment extends Model
 {
 
     protected $fillable = [
-        'pet_id', 'time_slot_id', 'service_id',
+        'pet_id', 'time_slot_id', 'service_id','vet_id',
         'status', 'is_walk_in', 'notes', 'created_by',
     ];
 
@@ -18,6 +18,10 @@ class Appointment extends Model
             'is_walk_in' => 'boolean',
         ];
     }
+
+    public function vet() {
+    return $this->belongsTo(User::class, 'vet_id');
+}
 
 
     public function pet()

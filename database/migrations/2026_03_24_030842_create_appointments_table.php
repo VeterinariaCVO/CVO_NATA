@@ -16,9 +16,11 @@ return new class extends Migration
                   ->constrained('time_slots')
                   ->nullOnDelete();
             $table->foreignId('service_id')->constrained('services');
+            $table->foreignId('vet_id')->nullable()->constrained('users')->nullOnDelete();
             $table->enum('status', [
                 'pending',       // cita agendada, esperando confirmación
-                'confirmed',     // cita confirmada
+                'confirmed',
+                'arrived',
                 'in_progress',   // en curso (walk-in entra directo aquí)
                 'completed',     // atención finalizada
                 'cancelled',     // cancelada (solo antes de in_progress)
