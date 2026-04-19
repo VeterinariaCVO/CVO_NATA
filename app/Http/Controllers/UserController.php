@@ -14,9 +14,22 @@ use App\Notifications\UserRegistered;
 class UserController extends Controller
 {
     use ApiResponse;
-    public function index()
+    public function index(Request $request)
     {
-        $users = User::with('role')->orderBy('name')->get();
+        // 1. Empezamos a armar la consulta (con su relación role)
+        $query = User::with('role');
+
+        // 2. Si Vue nos manda un role_id por la URL, filtramos por ese rol
+        if ($request->has('role_id')) {
+            $query->where('role_id', $request->role_id);
+        }
+
+        // 3. Ejecutamos la consulta: solo los activos, ordenados por nombre
+        $users = $query->where('active', true)
+                       ->orderBy('name')
+                       ->get();
+
+        // 4. Devolvemos la respuesta usando tu Trait y tu Resource
         return $this->success(UserResource::collection($users));
     }
 

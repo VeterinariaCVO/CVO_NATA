@@ -133,6 +133,9 @@ Route::middleware(['auth:sanctum', 'role:2'])->group(function () {
     Route::post('/recep/appointments',          [AppointmentController::class, 'store']);
     Route::put('/recep/appointments/{id}', [AppointmentController::class, 'update']);
     Route::delete('/recep/appointments/{id}', [AppointmentController::class, 'destroy']);
+
+    // 👇 Agrega esta línea
+    Route::get('/empleado/veterinarios', [UserController::class, 'veterinarians']);
 });
 
 // ─── CITAS: Cliente, Recepcionista y Admin (roles 1, 2, 3) ───────────────────

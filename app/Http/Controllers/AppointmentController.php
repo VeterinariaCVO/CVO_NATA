@@ -94,11 +94,12 @@ class AppointmentController extends Controller
             return $this->error('El horario seleccionado ya no está disponible.', 400);
         }
 
-        $appointment = Appointment::create([
+       $appointment = Appointment::create([
             'pet_id'       => $request->pet_id,
             'time_slot_id' => $request->time_slot_id,
             'service_id'   => $request->service_id,
-            'status'       => 'pending',
+            'status'       => $request->status ?? 'pending', // Toma el confirmado de Vue, si no hay, pone pending
+            'vet_id'       => $request->vet_id ?? null,      // Guarda al doctor si Vue lo envió
             'is_walk_in'   => false,
             'notes'        => $request->notes,
             'created_by'   => Auth::id(),
