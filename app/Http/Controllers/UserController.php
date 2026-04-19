@@ -145,4 +145,9 @@ class UserController extends Controller
             'pets'   => $client->pets,
         ]);
     }
+    public function veterinarians()
+{
+    $veterinarios = User::where('role_id', 4)->get(['id', 'name', 'email']);
+    return $this->success($veterinarios);
+}
 }
