@@ -84,6 +84,18 @@ class AppointmentController extends Controller
         return $this->success(
             AppointmentResource::collection($query->orderByDesc('created_at')->get())
         );
+
+
+if ($request->query('hoy') === 'true') {
+    $hoy = now()->format('Y-m-d');
+
+    $query->where(function($q) use ($hoy) {
+        // Opción A: Es una cita programada para hoy
+        $q->whereHas('timeSlot', fn($sq) => $sq->where('date', $hoy))
+        // Opción B: O es un Walk-in creado hoy
+          ->orWhere(fn($sq) => $sq->where('is_walk_in', true)->whereDate('created_at', $hoy));
+    });
+}
     }
 
     public function store(AppointmentRequest $request)
@@ -100,6 +112,7 @@ class AppointmentController extends Controller
             'service_id'   => $request->service_id,
             'status'       => $request->status ?? 'pending', // Toma el confirmado de Vue, si no hay, pone pending
             'vet_id'       => $request->vet_id ?? null,      // Guarda al doctor si Vue lo envió
+
             'is_walk_in'   => false,
             'notes'        => $request->notes,
             'created_by'   => Auth::id(),

@@ -144,8 +144,7 @@ Route::middleware(['auth:sanctum', 'role:1,2,3'])->group(function () {
     Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
 });
 
-// ─── CITAS: Solo Recepcionista y Admin (roles 1, 2) ──────────────────────────
-Route::middleware(['auth:sanctum', 'role:1,2'])->group(function () {
+Route::middleware(['auth:sanctum', 'role:1,2,4'])->group(function () {
     Route::put('/appointments/{id}',    [AppointmentController::class, 'update']);
 });
 
