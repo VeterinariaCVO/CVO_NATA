@@ -65,9 +65,9 @@ class AppointmentController extends Controller
         }
 
         if ($user->isVeterinario()) {
-    $query->where('vet_id', $user->id) // Solo sus pacientes
-          ->whereIn('status', ['confirmed', 'arrived', 'in_progress', 'completed']);
-}
+            $query->where('vet_id', $user->id)
+                ->whereIn('status', ['confirmed', 'arrived', 'in_progress', 'completed']);
+        }
 
         if ($request->filled('pet_id')) {
             $query->where('pet_id', $request->pet_id);
@@ -84,18 +84,6 @@ class AppointmentController extends Controller
         return $this->success(
             AppointmentResource::collection($query->orderByDesc('created_at')->get())
         );
-
-
-if ($request->query('hoy') === 'true') {
-    $hoy = now()->format('Y-m-d');
-
-    $query->where(function($q) use ($hoy) {
-        // Opción A: Es una cita programada para hoy
-        $q->whereHas('timeSlot', fn($sq) => $sq->where('date', $hoy))
-        // Opción B: O es un Walk-in creado hoy
-          ->orWhere(fn($sq) => $sq->where('is_walk_in', true)->whereDate('created_at', $hoy));
-    });
-}
     }
 
     public function store(AppointmentRequest $request)
@@ -106,13 +94,12 @@ if ($request->query('hoy') === 'true') {
             return $this->error('El horario seleccionado ya no está disponible.', 400);
         }
 
-       $appointment = Appointment::create([
+        $appointment = Appointment::create([
             'pet_id'       => $request->pet_id,
             'time_slot_id' => $request->time_slot_id,
             'service_id'   => $request->service_id,
-            'status'       => $request->status ?? 'pending', // Toma el confirmado de Vue, si no hay, pone pending
-            'vet_id'       => $request->vet_id ?? null,      // Guarda al doctor si Vue lo envió
-
+            'status'       => $request->status ?? 'pending',
+            'vet_id'       => $request->vet_id ?? null,
             'is_walk_in'   => false,
             'notes'        => $request->notes,
             'created_by'   => Auth::id(),
@@ -169,6 +156,7 @@ if ($request->query('hoy') === 'true') {
             201
         );
     }
+
     public function show($id)
     {
         $appointment = $this->baseQuery()->findOrFail($id);
@@ -211,11 +199,12 @@ if ($request->query('hoy') === 'true') {
         }
 
         $appointment->update([
-            'pet_id'       => $request->pet_id ?? $appointment->pet_id,
+            'pet_id'       => $request->pet_id       ?? $appointment->pet_id,
             'time_slot_id' => $request->time_slot_id ?? $appointment->time_slot_id,
-            'service_id'   => $request->service_id ?? $appointment->service_id,
-            'notes'        => $request->notes ?? $appointment->notes,
-            'status'       => $request->status ?? $appointment->status,
+            'service_id'   => $request->service_id   ?? $appointment->service_id,
+            'notes'        => $request->notes        ?? $appointment->notes,
+            'status'       => $request->status       ?? $appointment->status,
+            'vet_id'       => $request->filled('vet_id') ? $request->vet_id : $appointment->vet_id,
         ]);
 
         $appointment->load([
@@ -297,7 +286,7 @@ if ($request->query('hoy') === 'true') {
                             $adminOrReception,
                             'appointment_cancelled_alert',
                             $appointment->id,
-                            new AppointmentCancelledAlert($appointment, Auth::user())
+                            new AppointmentCancelled($appointment)
                         );
                     });
             }
@@ -339,7 +328,6 @@ if ($request->query('hoy') === 'true') {
 
         $owner = $appointment->pet?->owner;
 
-        // Notificar al dueño
         if ($owner) {
             $this->notifyOnce(
                 $owner,
@@ -349,7 +337,6 @@ if ($request->query('hoy') === 'true') {
             );
         }
 
-        // Notificar a recepcionistas y admin que se canceló una cita
         User::whereIn('role_id', [1, 2])
             ->where('active', true)
             ->get()

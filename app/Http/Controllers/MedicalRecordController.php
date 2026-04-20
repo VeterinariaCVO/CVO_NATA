@@ -8,6 +8,7 @@ use App\Http\Traits\ApiResponse;
 use App\Models\Appointment;
 use App\Models\MedicalRecord;
 use App\Notifications\AppointmentCompleted;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -15,7 +16,7 @@ class MedicalRecordController extends Controller
 {
     use ApiResponse;
 
-    public function index()
+    public function index(Request $request)
     {
         $user  = Auth::user();
         $query = MedicalRecord::with([
@@ -25,29 +26,40 @@ class MedicalRecordController extends Controller
             'veterinarian',
         ]);
 
-        if ($user->isCliente()) {
-            $query->whereHas('appointment.pet', fn($q) => $q->where('owner_id', $user->id));
+        // Filtro por mascota (cualquier rol que lo mande)
+        if ($request->filled('pet_id')) {
+            $query->whereHas('appointment', fn($q) =>
+            $q->where('pet_id', $request->integer('pet_id'))
+            );
         }
 
+        // Cliente: solo sus propias mascotas
+        if ($user->isCliente()) {
+            $query->whereHas('appointment.pet', fn($q) =>
+            $q->where('owner_id', $user->id)
+            );
+        }
+
+        // Veterinario: solo sus expedientes
         if ($user->isVeterinario()) {
             $query->where('veterinarian_id', $user->id);
         }
 
         return $this->success(
-            MedicalRecordResource::collection($query->orderByDesc('created_at')->get())
+            MedicalRecordResource::collection(
+                $query->orderByDesc('created_at')->get()
+            )
         );
     }
 
     public function store(MedicalRecordRequest $request)
     {
-        // 1. Verificar si ya existe un expediente para esta cita (evita duplicados)
         if (MedicalRecord::where('appointment_id', $request->appointment_id)->exists()) {
             return $this->error('Esta consulta ya tiene un registro clínico guardado.', 422);
         }
 
         $appointment = Appointment::with(['pet.owner', 'service'])->findOrFail($request->appointment_id);
 
-        // 2. AGREGADO 'arrived': Permitir crear expediente si el paciente está en sala, confirmado o en curso
         $estadosPermitidos = ['confirmed', 'in_progress', 'arrived'];
 
         if (!in_array($appointment->status, $estadosPermitidos)) {
@@ -55,16 +67,13 @@ class MedicalRecordController extends Controller
         }
 
         return DB::transaction(function () use ($request, $appointment) {
-            // 3. Crear el registro
             $record = MedicalRecord::create(array_merge(
                 $request->validated(),
                 ['veterinarian_id' => Auth::id()]
             ));
 
-            // 4. Finalizar la cita
             $appointment->update(['status' => 'completed']);
 
-            // 5. Notificar al dueño
             $owner = $appointment->pet?->owner;
             if ($owner) {
                 $owner->notify(new AppointmentCompleted($appointment));
@@ -83,7 +92,6 @@ class MedicalRecordController extends Controller
         });
     }
 
-    // Los métodos show y update están perfectos, no requieren cambios.
-    public function show($id) { /* ... */ }
-    public function update(MedicalRecordRequest $request, $id) { /* ... */ }
+    public function show($id) { }
+    public function update(MedicalRecordRequest $request, $id) { }
 }

@@ -98,6 +98,7 @@ Route::middleware(['auth:sanctum', 'role:1'])->group(function () {
 
     // Walk-in
     Route::post('/walk-in',               [WalkInController::class, 'store']);
+    Route::get('/admin/veterinarios', [UserController::class, 'veterinarians']);
 
     // Mascotas (gestion completa)
     Route::get('/admin1/pets',          [PetController::class, 'index']);
